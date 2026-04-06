@@ -1,78 +1,141 @@
-import { Link } from '@tanstack/react-router'
-import ThemeToggle from './ThemeToggle'
+import { Link, useRouter } from '@tanstack/react-router';
+import { useState } from 'react';
+import ThemeToggle from './ThemeToggle';
+import { useAuth } from '../contexts/AuthContext';
+import { Menu, X, LogOut, User, LogIn } from 'lucide-react';
 
 export default function Header() {
+  const { session, signOut, role } = useAuth();
+  const router = useRouter();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.navigate({ to: '/login' });
+  };
+
+  const navLinks = [
+    { to: '/contacts', label: 'Contacts', search: undefined },
+    { to: '/attendance', label: 'Attendance', search: undefined },
+    { to: '/travel', label: 'Vicharan', search: { date: new Date().toISOString().split('T')[0] } },
+    { to: '/journal', label: 'Smruties', search: { stopId: undefined } },
+  ];
+
   return (
-    <header className="sticky top-0 z-50 border-b border-[var(--line)] bg-[var(--header-bg)] px-4 backdrop-blur-lg">
-      <nav className="page-wrap flex flex-wrap items-center gap-x-3 gap-y-2 py-3 sm:py-4">
-        <h2 className="m-0 flex-shrink-0 text-base font-semibold tracking-tight">
-          <Link
-            to="/"
-            className="inline-flex items-center gap-2 rounded-full border border-[var(--chip-line)] bg-[var(--chip-bg)] px-3 py-1.5 text-sm text-[var(--sea-ink)] no-underline shadow-[0_8px_24px_rgba(30,90,72,0.08)] sm:px-4 sm:py-2"
-          >
-            <span className="h-2 w-2 rounded-full bg-[linear-gradient(90deg,#56c6be,#7ed3bf)]" />
-            TanStack Start
-          </Link>
-        </h2>
+    <header className="sticky top-0 z-50 border-b border-border bg-background/90 px-4 py-3 backdrop-blur-lg">
+      <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4">
+        
+        {/* Logo Left */}
+        <Link to="/" className="flex items-center gap-2 group outline-none" onClick={() => setIsMobileMenuOpen(false)}>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm transition-transform group-hover:scale-105 active:scale-95">
+            <span className="font-bold font-serif italic text-sm tracking-tighter">N</span>
+          </div>
+          <span className="text-xl font-bold tracking-tight text-foreground group-hover:text-primary transition-colors font-serif">Nimmit Sevak</span>
+        </Link>
 
-        <div className="ml-auto flex items-center gap-1.5 sm:ml-0 sm:gap-2">
-          <a
-            href="https://x.com/tan_stack"
-            target="_blank"
-            rel="noreferrer"
-            className="hidden rounded-xl p-2 text-[var(--sea-ink-soft)] transition hover:bg-[var(--link-bg-hover)] hover:text-[var(--sea-ink)] sm:block"
-          >
-            <span className="sr-only">Follow TanStack on X</span>
-            <svg viewBox="0 0 16 16" aria-hidden="true" width="24" height="24">
-              <path
-                fill="currentColor"
-                d="M12.6 1h2.2L10 6.48 15.64 15h-4.41L7.78 9.82 3.23 15H1l5.14-5.84L.72 1h4.52l3.12 4.73L12.6 1zm-.77 12.67h1.22L4.57 2.26H3.26l8.57 11.41z"
-              />
-            </svg>
-          </a>
-          <a
-            href="https://github.com/TanStack"
-            target="_blank"
-            rel="noreferrer"
-            className="hidden rounded-xl p-2 text-[var(--sea-ink-soft)] transition hover:bg-[var(--link-bg-hover)] hover:text-[var(--sea-ink)] sm:block"
-          >
-            <span className="sr-only">Go to TanStack GitHub</span>
-            <svg viewBox="0 0 16 16" aria-hidden="true" width="24" height="24">
-              <path
-                fill="currentColor"
-                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"
-              />
-            </svg>
-          </a>
+        {/* Desktop Navigation Center */}
+        <nav className="hidden md:flex flex-1 justify-center items-center gap-8 font-semibold text-[13px] tracking-wider uppercase font-sans">
+          {navLinks.map((link) => (
+            <Link 
+              key={link.to} 
+              to={link.to} 
+              search={link.search} 
+              className="text-muted-foreground hover:text-primary outline-none transition-colors"
+              activeProps={{ className: 'text-primary' }}
+            >
+              {link.label}
+            </Link>
+          ))}
+        </nav>
 
+        {/* Icons Right */}
+        <div className="ml-auto flex items-center shrink-0 gap-2 sm:gap-3">
           <ThemeToggle />
-        </div>
+          
+          <div className="hidden sm:flex items-center gap-2 border-l border-border pl-3">
+             {session ? (
+               <div className="relative group/profile flex items-center justify-center">
+                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary text-secondary-foreground shadow-inner cursor-default relative z-10" title="Logged in securely">
+                   <User className="h-4 w-4" />
+                 </div>
+                 
+                 {/* Popover Dropdown */}
+                 <div className="absolute right-0 top-0 pt-[48px] hidden group-hover/profile:block transition-all z-0">
+                    <div className="min-w-[200px] flex-col rounded-xl border border-border bg-card p-2 shadow-xl font-sans">
+                        <div className="px-3 pb-2 pt-1 border-b border-border mb-2">
+                          <p className="text-[13px] font-bold tracking-tight text-foreground truncate">{session.user.email}</p>
+                          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mt-1">Role: {role}</p>
+                        </div>
+                        <button 
+                          onClick={handleSignOut}
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-destructive hover:bg-destructive/10 transition-all outline-none"
+                        >
+                          <LogOut className="h-3.5 w-3.5" /> Sign Out
+                        </button>
+                    </div>
+                 </div>
+               </div>
+             ) : (
+               <Link 
+                 to="/login"
+                 className="flex h-9 items-center gap-2 rounded-full bg-primary/10 px-4 text-xs font-bold uppercase tracking-wider text-primary hover:bg-primary/20 transition-all outline-none font-sans"
+               >
+                 <LogIn className="h-4 w-4" /> Log in
+               </Link>
+             )}
+          </div>
 
-        <div className="order-3 flex w-full flex-wrap items-center gap-x-4 gap-y-1 pb-1 text-sm font-semibold sm:order-2 sm:w-auto sm:flex-nowrap sm:pb-0">
-          <Link
-            to="/"
-            className="nav-link"
-            activeProps={{ className: 'nav-link is-active' }}
+          {/* Mobile Menu Toggle */}
+          <button 
+            className="md:hidden flex h-9 w-9 items-center justify-center rounded-full bg-secondary text-secondary-foreground active:scale-95 transition-all outline-none"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           >
-            Home
-          </Link>
-          <Link
-            to="/about"
-            className="nav-link"
-            activeProps={{ className: 'nav-link is-active' }}
-          >
-            About
-          </Link>
-          <a
-            href="https://tanstack.com/start/latest/docs/framework/react/overview"
-            className="nav-link"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Docs
-          </a>
+            {isMobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+          </button>
         </div>
-      </nav>
+      </div>
+
+      {/* Mobile Menu Dropdown */}
+      {isMobileMenuOpen && (
+        <div className="absolute left-0 right-0 top-[100%] mt-px border-b border-border bg-background/95 backdrop-blur-xl px-4 py-6 md:hidden shadow-xl animate-in slide-in-from-top-2">
+          <nav className="flex flex-col gap-6 font-sans">
+            <div className="flex flex-col gap-4 text-lg font-bold">
+              {navLinks.map((link) => (
+                <Link 
+                  key={link.to} 
+                  to={link.to} 
+                  search={link.search} 
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="block w-full border-b border-border pb-3 text-muted-foreground transition-colors hover:text-primary"
+                  activeProps={{ className: 'text-primary border-primary/50' }}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </div>
+
+            {/* Mobile Auth Status */}
+            <div className="pt-2">
+              {session ? (
+                <button 
+                  onClick={() => { handleSignOut(); setIsMobileMenuOpen(false); }}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-destructive/10 py-3 text-sm font-bold text-destructive transition-colors hover:bg-destructive/20"
+                >
+                  <LogOut className="h-4 w-4" /> Sign Out
+                </button>
+              ) : (
+                <Link 
+                  to="/login"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary/10 py-3 text-sm font-bold text-primary transition-colors hover:bg-primary/20"
+                >
+                  <LogIn className="h-4 w-4" /> Log In
+                </Link>
+              )}
+            </div>
+          </nav>
+        </div>
+      )}
     </header>
-  )
+  );
 }
