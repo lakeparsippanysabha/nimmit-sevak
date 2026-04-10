@@ -192,10 +192,6 @@ You can learn more about all of the offerings from TanStack in the [TanStack doc
 
 For TanStack Start specific documentation, visit [TanStack Start](https://tanstack.com/start).
 
-# Test users
-Password123!
+# Test Users
 
-superadmin@example.com
-admin@example.com
-user@example.com
-guest@example.com
+See `.env.example` for test account setup instructions.

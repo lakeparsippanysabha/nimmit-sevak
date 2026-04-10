@@ -2,6 +2,7 @@ import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { handleMutationError } from '../lib/errors';
 import { MediaUploader, type UploadedMedia } from '../components/MediaUploader';
 import { MediaGalleries } from '../components/MediaGalleries';
 import { PenLine, Send, Calendar, MapPin, Loader2, Navigation, Edit2, Check, X } from 'lucide-react';
@@ -113,8 +114,7 @@ function JournalPage() {
       setPendingMedia([]);
       router.invalidate();
     } catch (err) {
-      console.error("Journal Submission Error:", err);
-      alert("Failed to publish journal entry.");
+      handleMutationError('journal:submit', err);
     } finally {
       setIsSubmitting(false);
     }
@@ -144,7 +144,7 @@ function JournalPage() {
        await supabase.from('journal_media').delete().eq('id', media.id);
        router.invalidate(); // instantly remove from screen
     } catch (err) {
-       console.error("Media deletion failed", err);
+       handleMutationError('journal:delete-media', err);
     }
   };
 
@@ -172,8 +172,7 @@ function JournalPage() {
       setEditingEntryId(null);
       router.invalidate();
     } catch (error) {
-      console.error("Failed to update entry:", error);
-      alert("Could not update the entry.");
+      handleMutationError('journal:save-edit', error);
     } finally {
       setIsSavingEdit(false);
     }

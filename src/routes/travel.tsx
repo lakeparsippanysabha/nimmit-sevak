@@ -8,6 +8,7 @@ import { MapPin, Search, Plus, GripVertical, Clock, X, Calendar, BookText } from
 import { Link } from '@tanstack/react-router';
 import { supabase } from '../lib/supabase';
 import { fetchDirections, geocode } from '../lib/mapbox';
+import { handleMutationError } from '../lib/errors';
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
@@ -181,7 +182,7 @@ function TravelPage() {
           drive_time_mins: s.drive_time_mins
         }))
       );
-      if (error) console.error("Sync error:", error);
+      if (error) handleMutationError('travel:reorder-sync', error);
     }
   };
 
@@ -199,7 +200,7 @@ function TravelPage() {
       }
       
       if (error || !data) {
-        console.error("Failed to create plan:", error);
+        handleMutationError('travel:create-plan', error);
         return;
       }
       targetPlanId = data.id;
@@ -221,7 +222,7 @@ function TravelPage() {
     }).select().single();
     
     if (stopError) {
-      console.error("Failed to insert stop:", stopError);
+      handleMutationError('travel:insert-stop', stopError);
       return;
     }
 

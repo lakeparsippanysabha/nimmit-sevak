@@ -5,7 +5,9 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Calendar, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import type { Contact } from '../data/mockContacts';
+import type { ContactRow } from '../lib/database.types';
+import { mapContactRows } from '../lib/mappers';
+import { handleLoaderError } from '../lib/errors';
 
 // Date formatter for default today
 const getTodayDateString = () => {
@@ -37,17 +39,10 @@ export const Route = createFileRoute('/attendance')({
       .select('*')
       .eq('date', date);
 
-    if (contactsError) console.error('Contacts error:', contactsError);
-    if (attendanceError) console.error('Attendance error:', attendanceError);
+    if (contactsError) handleLoaderError('attendance:contacts', contactsError, null);
+    if (attendanceError) handleLoaderError('attendance:records', attendanceError, null);
 
-    const contacts = (contactsData || []).map((row: any) => ({
-      id: row.id,
-      firstName: row.first_name,
-      lastName: row.last_name,
-      avatarUrl: row.avatar_url,
-      company: row.company,
-      jobTitle: row.job_title,
-    })) as Contact[];
+    const contacts = mapContactRows((contactsData || []) as ContactRow[]);
 
     // Map attendance records by contact_id for O(1) lookup
     const attendanceMap = new Map<string, any>();
@@ -229,9 +224,11 @@ function AttendancePage() {
                           <span className="truncate text-sm font-medium text-foreground tracking-tight py-0.5">
                             {contact.firstName} <span className="font-bold">{contact.lastName}</span>
                           </span>
-                          <span className="truncate text-xs text-muted-foreground">
-                            {contact.company || 'No Company'}
-                          </span>
+                          {contact.mandal && (
+                            <span className="truncate text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider w-fit">
+                              {contact.mandal}
+                            </span>
+                          )}
                         </div>
                       </div>
 

@@ -3,8 +3,11 @@ import { ProtectedRoute } from '../components/ProtectedRoute';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, UserCircle, Phone, Mail, MapPin, Briefcase, X } from 'lucide-react';
+import { Search, UserCircle, Phone, Mail, MapPin, Clock, X } from 'lucide-react';
 import type { Contact } from '../data/mockContacts';
+import type { ContactRow } from '../lib/database.types';
+import { mapContactRows } from '../lib/mappers';
+import { handleLoaderError } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 
 export const Route = createFileRoute('/contacts')({
@@ -13,23 +16,10 @@ export const Route = createFileRoute('/contacts')({
       .from('contacts')
       .select('*')
       .order('first_name');
-    
-    if (error) {
-      console.error('Failed to fetch contacts:', error);
-      return [];
-    }
-    
-    // Map snake_case to camelCase to match the existing UI logic
-    return (data || []).map((row: any) => ({
-      id: row.id,
-      firstName: row.first_name,
-      lastName: row.last_name,
-      avatarUrl: row.avatar_url,
-      company: row.company,
-      jobTitle: row.job_title,
-      notes: row.notes,
-      fields: row.fields || [],
-    })) as Contact[];
+
+    if (error) return handleLoaderError('contacts', error, [] as Contact[]);
+
+    return mapContactRows((data || []) as ContactRow[]);
   },
   component: ContactsPage,
 });
@@ -37,7 +27,7 @@ export const Route = createFileRoute('/contacts')({
 function ContactsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
-  
+
   const initialContacts = Route.useLoaderData();
   const [fetchedContacts, setFetchedContacts] = useState<Contact[]>(initialContacts);
 
@@ -47,16 +37,7 @@ function ContactsPage() {
     const hydrateContacts = async () => {
       const { data } = await supabase.from('contacts').select('*').order('first_name');
       if (data && data.length > 0) {
-        setFetchedContacts(data.map((row: any) => ({
-          id: row.id,
-          firstName: row.first_name,
-          lastName: row.last_name,
-          avatarUrl: row.avatar_url,
-          company: row.company,
-          jobTitle: row.job_title,
-          notes: row.notes,
-          fields: row.fields || [],
-        })) as Contact[]);
+        setFetchedContacts(mapContactRows(data as ContactRow[]));
       }
     };
     hydrateContacts();
@@ -67,13 +48,15 @@ function ContactsPage() {
     let filtered = fetchedContacts;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(c => 
-        c.firstName.toLowerCase().includes(q) || 
+      filtered = filtered.filter(c =>
+        c.firstName.toLowerCase().includes(q) ||
         c.lastName.toLowerCase().includes(q) ||
-        (c.company && c.company.toLowerCase().includes(q))
+        (c.nickname && c.nickname.toLowerCase().includes(q)) ||
+        (c.mandal && c.mandal.toLowerCase().includes(q)) ||
+        (c.email && c.email.toLowerCase().includes(q))
       );
     }
-    
+
     // Sort Alphabetically
     filtered.sort((a, b) => {
       const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
@@ -82,7 +65,7 @@ function ContactsPage() {
     });
 
     return filtered;
-  }, [searchQuery]);
+  }, [fetchedContacts, searchQuery]);
 
   // A-Z Grouping extraction
   const { groupedItems, letterMap } = useMemo(() => {
@@ -105,12 +88,12 @@ function ContactsPage() {
   }, [processedContacts]);
 
   const parentRef = useRef<HTMLDivElement>(null);
-  
+
   // Virtual list to power 60fps scrolling
   const virtualizer = useVirtualizer({
     count: groupedItems.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: (index) => groupedItems[index].type === 'header' ? 32 : 64,
+    estimateSize: (index) => groupedItems[index].type === 'header' ? 32 : 72,
     overscan: 15,
   });
 
@@ -121,22 +104,22 @@ function ContactsPage() {
     }
   };
 
-  const selectedContact = selectedContactId 
-    ? processedContacts.find(c => c.id === selectedContactId) 
+  const selectedContact = selectedContactId
+    ? processedContacts.find(c => c.id === selectedContactId)
     : null;
 
   return (
     <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'User']}>
       <div className="flex h-[calc(100vh-64px)] w-full overflow-hidden bg-background">
-        
+
         {/* Left Pane - Master List (Responsive hidden on small if detail is open) */}
-        <div className={`relative flex h-full flex-col border-r border-border bg-card transition-all duration-300 ${selectedContactId ? 'hidden w-full md:block md:w-[350px] xl:w-[400px]' : 'w-full md:w-[350px] xl:w-[400px]'}`}>
-          
+        <div className={`relative flex h-full flex-col border-r border-border bg-card transition-all duration-300 min-h-0 min-w-0 w-full md:w-[350px] xl:w-[400px]`}>
+
           <div className="z-10 flex-shrink-0 bg-card/80 p-4 pt-6 backdrop-blur-xl">
             <h1 className="text-2xl font-bold tracking-tight text-foreground font-serif">Contacts</h1>
-            
+
             {/* Semantic Search Bar */}
-            <motion.div 
+            <motion.div
               className="relative mt-4 font-sans"
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.99 }}
@@ -146,7 +129,7 @@ function ContactsPage() {
               </div>
               <input
                 type="text"
-                placeholder="Search contacts..."
+                placeholder="Search by name, mandal, email..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="block w-full rounded-xl border border-input bg-background py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground shadow-sm transition-all focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
@@ -163,7 +146,7 @@ function ContactsPage() {
           </div>
 
           {/* Virtualized Container */}
-          <div className="relative flex-1 overflow-y-auto overflow-x-hidden outline-none font-sans" ref={parentRef}>
+          <div className="relative flex-1 overflow-y-auto overflow-x-hidden outline-none font-sans min-h-0" ref={parentRef}>
             <div
               style={{
                 height: `${virtualizer.getTotalSize()}px`,
@@ -173,7 +156,7 @@ function ContactsPage() {
             >
               {virtualizer.getVirtualItems().map((virtualItem) => {
                 const item = groupedItems[virtualItem.index];
-                
+
                 if (item.type === 'header') {
                   return (
                     <div
@@ -194,7 +177,7 @@ function ContactsPage() {
                 }
 
                 const isActive = item.contact.id === selectedContactId;
-                
+
                 return (
                   <div
                     key={virtualItem.key}
@@ -209,29 +192,37 @@ function ContactsPage() {
                     }}
                     className={`flex cursor-pointer items-center gap-3 border-b border-border px-4 py-2 transition-colors hover:bg-muted/50 ${isActive ? 'bg-primary/10 border-l-4 border-l-primary' : 'border-l-4 border-l-transparent'}`}
                   >
-                    <img 
-                      src={item.contact.avatarUrl} 
-                      alt="" 
+                    <img
+                      src={item.contact.avatarUrl}
+                      alt=""
                       className="h-10 w-10 flex-shrink-0 rounded-full object-cover border border-border"
                       loading="lazy"
                     />
                     <div className="flex flex-col truncate">
                       <span className="truncate text-sm font-medium text-foreground font-serif tracking-tight pr-1">
                         {item.contact.firstName} <span className="font-bold">{item.contact.lastName}</span>
+                        {item.contact.nickname && <span className="ml-1 text-muted-foreground italic text-xs">({item.contact.nickname})</span>}
                       </span>
-                      {item.contact.company && (
-                        <span className="truncate text-xs text-muted-foreground font-sans">
-                          {item.contact.company}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {item.contact.mandal && (
+                          <span className="truncate text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                            {item.contact.mandal}
+                          </span>
+                        )}
+                        {item.contact.memberType && (
+                          <span className="truncate text-[10px] text-muted-foreground font-sans">
+                            {item.contact.memberType}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
               })}
             </div>
-            
+
             {groupedItems.length === 0 && (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 className="flex h-full flex-col items-center justify-center p-8 text-center text-muted-foreground font-sans"
@@ -257,10 +248,10 @@ function ContactsPage() {
         </div>
 
         {/* Right Pane - Detail View  */}
-        <div className={`flex flex-1 flex-col overflow-y-auto bg-background ${!selectedContactId ? 'hidden md:flex' : 'flex'}`}>
+        <div className={`flex flex-1 flex-col overflow-y-auto bg-background flex`}>
           <AnimatePresence mode="wait">
             {!selectedContact ? (
-              <motion.div 
+              <motion.div
                 key="empty"
                 initial={{ opacity: 0, filter: 'blur(10px)' }}
                 animate={{ opacity: 1, filter: 'blur(0px)' }}
@@ -271,15 +262,15 @@ function ContactsPage() {
                 <p>Select a contact to view details</p>
               </motion.div>
             ) : (
-              <motion.div 
+              <motion.div
                 key="detail"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="mx-auto w-full max-w-2xl p-6 md:p-12"
+                className="mx-auto w-full max-w-2xl p-6 md:p-12 mb-20"
               >
                 {/* Mobile Back Button */}
-                <button 
+                <button
                   className="mb-8 flex items-center text-sm font-bold text-primary md:hidden font-sans"
                   onClick={() => setSelectedContactId(null)}
                 >
@@ -287,55 +278,129 @@ function ContactsPage() {
                 </button>
 
                 <div className="flex flex-col items-center text-center">
-                  <motion.img 
+                  <motion.img
                     layoutId={`avatar-${selectedContact.id}`}
-                    src={selectedContact.avatarUrl} 
-                    alt="" 
+                    src={selectedContact.avatarUrl}
+                    alt=""
                     className="h-32 w-32 rounded-full border border-border shadow-xl"
                   />
                   <h2 className="mt-6 text-3xl font-bold tracking-tight text-foreground font-serif">
                     {selectedContact.firstName} {selectedContact.lastName}
                   </h2>
-                  {(selectedContact.jobTitle || selectedContact.company) && (
-                    <p className="mt-2 text-lg text-muted-foreground font-sans">
-                      {selectedContact.jobTitle} {selectedContact.company && `at ${selectedContact.company}`}
-                    </p>
-                  )}
+                  <div className="mt-2 flex items-center gap-2 flex-wrap justify-center font-sans">
+                    {selectedContact.nickname && <span className="text-muted-foreground mr-1 italic">"{selectedContact.nickname}"</span>}
+                    {selectedContact.memberType && (
+                      <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+                        {selectedContact.memberType}
+                      </span>
+                    )}
+                    {selectedContact.mandal && (
+                      <span className="bg-muted text-muted-foreground px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-border">
+                        {selectedContact.mandal}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                <div className="mt-12 space-y-6 font-sans">
-                  <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-                    {selectedContact.fields.map((field, idx) => (
-                      <div 
-                        key={field.id}
-                        className={`flex items-start gap-4 p-4 ${idx !== selectedContact.fields.length - 1 ? 'border-b border-border' : ''}`}
-                      >
-                        <div className="mt-0.5 rounded-lg bg-primary/10 p-2 text-primary">
-                          {field.type === 'email' && <Mail className="h-5 w-5" />}
-                          {field.type === 'phone' && <Phone className="h-5 w-5" />}
-                          {field.type === 'address' && <MapPin className="h-5 w-5" />}
-                          {(field.type === 'text' || field.type === 'date' || field.type === 'url') && <Briefcase className="h-5 w-5" />}
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            {field.label}
-                          </span>
-                          <span className="mt-1 text-base font-medium text-foreground">
-                            {field.value}
-                          </span>
-                        </div>
+                <div className="mt-12 space-y-8 font-sans">
+
+                  {/* Personal Info */}
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">Personal Info</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="rounded-xl border border-border bg-card p-4">
+                        <span className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">Gender</span>
+                        <span className="text-sm font-medium">{selectedContact.gender || 'Not specified'}</span>
                       </div>
-                    ))}
+                      <div className="rounded-xl border border-border bg-card p-4">
+                        <span className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">Age</span>
+                        <span className="text-sm font-medium">{selectedContact.age || 'Not specified'}</span>
+                      </div>
+                    </div>
                   </div>
 
-                  {selectedContact.notes && (
-                    <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Notes</h3>
-                      <p className="mt-3 text-sm leading-relaxed text-foreground">
-                        {selectedContact.notes}
-                      </p>
+                  {/* Contact Details */}
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">Contact Details</h3>
+                    <div className="rounded-2xl border border-border bg-card overflow-hidden divide-y divide-border">
+                      <div className="flex items-center gap-4 p-4">
+                        <div className="bg-primary/10 p-2 rounded-lg text-primary"><Mail className="h-5 w-5" /></div>
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-muted-foreground block mb-0.5">Email</span>
+                          <span className="text-sm font-medium">{selectedContact.email || 'None'}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 p-4">
+                        <div className="bg-primary/10 p-2 rounded-lg text-primary"><Phone className="h-5 w-5" /></div>
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-muted-foreground block mb-0.5">Cellphone</span>
+                          <span className="text-sm font-medium">{selectedContact.cellphone || 'None'}</span>
+                        </div>
+                      </div>
                     </div>
-                  )}
+                  </div>
+
+                  {/* Location Info */}
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">Location</h3>
+                    <div className="rounded-2xl border border-border bg-card p-5 relative overflow-hidden shadow-sm">
+                      <div className="absolute top-0 right-0 p-4 opacity-5"><MapPin className="h-20 w-20" /></div>
+                      <div className="space-y-4 relative z-10">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">Address</span>
+                          <p className="text-sm font-medium leading-relaxed">
+                            {selectedContact.address1 || 'No address provided'}
+                            {selectedContact.address2 && <><br />{selectedContact.address2}</>}
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <span className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">City</span>
+                            <span className="text-sm font-medium">{selectedContact.city || '—'}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">State & Zip</span>
+                            <span className="text-sm font-medium">{selectedContact.state} {selectedContact.zip}</span>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 border-t border-border pt-4">
+                          <div>
+                            <span className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">County</span>
+                            <span className="text-sm font-medium">{selectedContact.county || '—'}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">Country</span>
+                            <span className="text-sm font-medium">{selectedContact.country || 'USA'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Followup & Notes */}
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">Status & Notes</h3>
+                    <div className="grid grid-cols-1 gap-4">
+                      {selectedContact.followup && (
+                        <div className="rounded-xl border border-border bg-amber-50 dark:bg-amber-950/20 p-4 flex items-center justify-between">
+                          <div className="flex items-center gap-3 text-amber-900 dark:text-amber-400">
+                            <Clock className="h-5 w-5" />
+                            <div>
+                              <span className="text-[10px] font-bold uppercase block mb-0.5 opacity-70">Next Follow-up</span>
+                              <span className="text-sm font-bold">{selectedContact.followup}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+                        <span className="text-[10px] font-bold uppercase text-muted-foreground block mb-3">Biography / Internal Notes</span>
+                        <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
+                          {selectedContact.notes || 'No detailed notes provided for this contact.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
               </motion.div>
             )}
