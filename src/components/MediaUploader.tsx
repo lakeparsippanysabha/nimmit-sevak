@@ -6,16 +6,17 @@ import { UploadCloud, Loader2 } from 'lucide-react';
 export interface UploadedMedia {
   file_path: string;
   file_type: 'image' | 'video' | 'audio';
-  file_size: number;
+  url: string;
 }
 
-export function MediaUploader({ onFilesUploaded }: { onFilesUploaded: (files: UploadedMedia[]) => void }) {
+export function MediaUploader({ onFilesUploaded, onUploadError }: { onFilesUploaded: (files: UploadedMedia[]) => void, onUploadError?: (msg: string) => void }) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{current: number, total: number}>({current: 0, total: 0});
 
   const onDrop = useCallback(async (acceptedFiles: File[], rejectedFiles: any[]) => {
     if (rejectedFiles.length > 0) {
-      alert("Some files were rejected. Only images, video, and audio under 50MB are allowed.");
+      if (onUploadError) onUploadError("Some files were rejected. Only images, video, and audio under 50MB are allowed.");
+      else alert("Some files were rejected. Only images, video, and audio under 50MB are allowed.");
     }
     
     if (acceptedFiles.length === 0) return;
@@ -23,41 +24,46 @@ export function MediaUploader({ onFilesUploaded }: { onFilesUploaded: (files: Up
     setIsUploading(true);
     setUploadProgress({ current: 0, total: acceptedFiles.length });
     
-    const results: UploadedMedia[] = [];
-
-    for (let i = 0; i < acceptedFiles.length; i++) {
-      const file = acceptedFiles[i];
+    let completed = 0;
+    
+    // Concurrent map instead of sequential loop
+    const uploadPromises = acceptedFiles.map(async (file) => {
       let type: 'image' | 'video' | 'audio' | null = null;
       if (file.type.startsWith('image/')) type = 'image';
       else if (file.type.startsWith('video/')) type = 'video';
       else if (file.type.startsWith('audio/')) type = 'audio';
-      else continue; // skip unsupported
+      else return null; // skip unsupported
 
       const fileExt = file.name.split('.').pop() || 'tmp';
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `${type}s/${fileName}`; // prefix by folder
       
       const { data, error } = await supabase.storage.from('journal-media').upload(filePath, file, {
-        cacheControl: '3600',
+        cacheControl: '8640000',
         upsert: false
       });
+      
+      completed++;
+      setUploadProgress(prev => ({ ...prev, current: completed }));
 
       if (!error && data) {
-        results.push({
+        return {
           file_path: data.path,
           file_type: type,
-          file_size: file.size
-        });
-      } else {
-        console.error("Upload Error:", error);
+          url: supabase.storage.from('journal-media').getPublicUrl(data.path).data.publicUrl
+        } as UploadedMedia;
       }
       
-      setUploadProgress({ current: i + 1, total: acceptedFiles.length });
-    }
+      console.error("Upload Error:", error);
+      return null;
+    });
+
+    const resultsRaw = await Promise.all(uploadPromises);
+    const results = resultsRaw.filter(r => r !== null) as UploadedMedia[];
 
     onFilesUploaded(results);
     setIsUploading(false);
-  }, [onFilesUploaded]);
+  }, [onFilesUploaded, onUploadError]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
     onDrop, 

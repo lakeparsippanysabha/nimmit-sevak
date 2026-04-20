@@ -34,9 +34,9 @@ export function MediaGalleries({ media, onDeleteMedia }: { media: MediaFile[], o
     <div className="mt-4 flex flex-col gap-4">
       {/* Images Grid */}
       {images.length > 0 && (
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-3 w-full">
           {images.map(img => (
-            <div key={img.id} className={`relative overflow-hidden rounded-xl bg-background shadow-sm border border-border group ${images.length === 1 ? 'aspect-video w-full max-w-md' : 'aspect-square w-24 sm:w-32'}`}>
+            <div key={img.id} className={`relative overflow-hidden rounded-xl bg-background shadow-sm border border-border group ${images.length === 1 ? 'aspect-video w-full' : 'aspect-square flex-1 min-w-[120px] max-w-[240px]'}`}>
               {renderDeleteBtn(img)}
               <img 
                 src={getPublicUrl(img.file_path)} 
@@ -51,7 +51,7 @@ export function MediaGalleries({ media, onDeleteMedia }: { media: MediaFile[], o
 
       {/* Video Player */}
       {videos.map(vid => (
-        <div key={vid.id} className="relative aspect-video w-full max-w-md overflow-hidden rounded-xl bg-black shadow-md border border-border">
+        <div key={vid.id} className="relative aspect-video w-full overflow-hidden rounded-xl bg-black shadow-md border border-border">
           {renderDeleteBtn(vid)}
           <video 
             src={getPublicUrl(vid.file_path)} 

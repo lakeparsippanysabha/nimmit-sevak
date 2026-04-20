@@ -73,6 +73,7 @@ export interface TravelStopRow {
 
 export interface JournalEntryRow {
   id: string;
+  title: string | null;
   content: string | null;
   travel_plan_id: string | null;
   travel_stop_id: string | null;

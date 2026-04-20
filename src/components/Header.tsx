@@ -2,7 +2,7 @@ import { Link, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
 import ThemeToggle from './ThemeToggle';
 import { useAuth } from '../contexts/AuthContext';
-import { Menu, X, LogOut, User, LogIn } from 'lucide-react';
+import { Menu, X, LogOut, User, LogIn, UserPlus } from 'lucide-react';
 
 export default function Header() {
   const { session, signOut, role } = useAuth();
@@ -64,6 +64,14 @@ export default function Header() {
                       <p className="text-[13px] font-bold tracking-tight text-foreground truncate">{session.user.email}</p>
                       <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mt-1">Role: {role}</p>
                     </div>
+                    {role === 'Super Admin' && (
+                      <Link
+                        to="/signup"
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 border-b border-transparent text-xs font-bold text-foreground hover:bg-muted transition-all outline-none"
+                      >
+                        <UserPlus className="h-3.5 w-3.5" /> Create User
+                      </Link>
+                    )}
                     <button
                       onClick={handleSignOut}
                       className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-destructive hover:bg-destructive/10 transition-all outline-none"

@@ -29,11 +29,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        if (session?.user) fetchUserRole(session.user.id);
-        else {
+        
+        if (event === 'PASSWORD_RECOVERY') {
+          // Immediately redirect to update password page
+          window.location.href = '/update-password';
+          return;
+        }
+
+        if (session?.user) {
+          fetchUserRole(session.user.id);
+        } else {
           setRole('Guest');
           setIsLoading(false);
         }
@@ -44,6 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const fetchUserRole = async (userId: string) => {
+    setIsLoading(true);
     const { data, error } = await supabase
       .from('profiles')
       .select('role')

@@ -4,14 +4,13 @@ import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
-export const Route = createFileRoute('/login')({
-  component: LoginPage,
+export const Route = createFileRoute('/update-password')({
+  component: UpdatePasswordPage,
 });
 
-function LoginPage() {
-  const [isReset, setIsReset] = useState(false);
-  const [email, setEmail] = useState('');
+function UpdatePasswordPage() {
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,9 +18,9 @@ function LoginPage() {
   const navigate = useNavigate();
   const { session } = useAuth();
 
-  // Redirect if already logged in
-  if (session) {
-    return <Navigate to="/" replace />;
+  // Redirect to login if not authenticated (since you must be authenticated to update password)
+  if (!session) {
+    return <Navigate to="/login" replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -30,23 +29,29 @@ function LoginPage() {
     setError('');
     setSuccess('');
 
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      setLoading(false);
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Password should be at least 6 characters.');
+      setLoading(false);
+      return;
+    }
+
     try {
-      if (isReset) {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/update-password`,
-        });
-        if (error) throw error;
-        setSuccess('Password reset link sent! Check your email.');
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
+      const { error } = await supabase.auth.updateUser({
+        password: password,
+      });
+      if (error) throw error;
+      setSuccess('Password updated successfully! Redirecting...');
+      setTimeout(() => {
         navigate({ to: '/' });
-      }
+      }, 2000);
     } catch (err: any) {
-      setError(err.message || 'An error occurred during authentication.');
+      setError(err.message || 'An error occurred while updating the password.');
     } finally {
       setLoading(false);
     }
@@ -62,12 +67,10 @@ function LoginPage() {
       >
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold tracking-tight text-foreground font-serif">
-            {isReset ? 'Reset password' : 'Welcome back'}
+            Update password
           </h1>
           <p className="mt-2 text-sm text-muted-foreground font-sans">
-            {isReset 
-              ? 'Enter your email to receive a reset link' 
-              : 'Enter your details to sign in to your account'}
+            Enter your new password below
           </p>
         </div>
 
@@ -94,54 +97,38 @@ function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4 font-sans">
           <div>
             <label
-              htmlFor="email"
+              htmlFor="password"
               className="block text-sm font-medium text-foreground"
             >
-              Email
+              New Password
             </label>
             <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               required
               className="mt-1 block w-full rounded-lg border border-input bg-background px-4 py-2 text-foreground placeholder:text-muted-foreground shadow-sm focus:border-primary focus:ring-1 focus:ring-primary sm:text-sm outline-none transition-colors"
-              placeholder="you@example.com"
+              placeholder="••••••••"
             />
           </div>
-          
-          {!isReset && (
-            <div>
-              <div className="flex items-center justify-between">
-                <label
-                  htmlFor="password"
-                  className="block text-sm font-medium text-foreground"
-                >
-                  Password
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsReset(true);
-                    setError('');
-                    setSuccess('');
-                  }}
-                  className="text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
-                >
-                  Forgot password?
-                </button>
-              </div>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="mt-1 block w-full rounded-lg border border-input bg-background px-4 py-2 text-foreground placeholder:text-muted-foreground shadow-sm focus:border-primary focus:ring-1 focus:ring-primary sm:text-sm outline-none transition-colors"
-                placeholder="••••••••"
-              />
-            </div>
-          )}
+          <div>
+            <label
+              htmlFor="confirmPassword"
+              className="block text-sm font-medium text-foreground"
+            >
+              Confirm New Password
+            </label>
+            <input
+              id="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              className="mt-1 block w-full rounded-lg border border-input bg-background px-4 py-2 text-foreground placeholder:text-muted-foreground shadow-sm focus:border-primary focus:ring-1 focus:ring-primary sm:text-sm outline-none transition-colors"
+              placeholder="••••••••"
+            />
+          </div>
 
           <button
             type="submit"
@@ -154,28 +141,11 @@ function LoginPage() {
                 Processing...
               </span>
             ) : (
-              isReset ? 'Send Reset Link' : 'Sign in'
+              'Update Password'
             )}
           </button>
         </form>
-
-        {isReset && (
-          <div className="mt-6 text-center text-sm font-sans">
-            <button
-              type="button"
-              onClick={() => {
-                setIsReset(false);
-                setError('');
-                setSuccess('');
-              }}
-              className="font-bold text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-2 w-full"
-            >
-              ← Back to login
-            </button>
-          </div>
-        )}
       </motion.div>
     </div>
   );
 }
-

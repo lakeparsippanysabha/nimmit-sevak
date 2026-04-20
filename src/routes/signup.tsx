@@ -1,28 +1,23 @@
-import { createFileRoute, useNavigate, Navigate } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
+import { ProtectedRoute } from '../components/ProtectedRoute';
 
-export const Route = createFileRoute('/login')({
-  component: LoginPage,
+export const Route = createFileRoute('/signup')({
+  component: () => (
+    <ProtectedRoute allowedRoles={['Super Admin']}>
+      <SignupPage />
+    </ProtectedRoute>
+  ),
 });
 
-function LoginPage() {
-  const [isReset, setIsReset] = useState(false);
+function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-  
-  const navigate = useNavigate();
-  const { session } = useAuth();
-
-  // Redirect if already logged in
-  if (session) {
-    return <Navigate to="/" replace />;
-  }
+  const [success, setSuccess] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,22 +26,16 @@ function LoginPage() {
     setSuccess('');
 
     try {
-      if (isReset) {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/update-password`,
-        });
-        if (error) throw error;
-        setSuccess('Password reset link sent! Check your email.');
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
-        navigate({ to: '/' });
-      }
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+      if (error) throw error;
+      setSuccess('Signup successful! Please tell the user to check their email.');
+      setEmail('');
+      setPassword('');
     } catch (err: any) {
-      setError(err.message || 'An error occurred during authentication.');
+      setError(err.message || 'An error occurred during sign up.');
     } finally {
       setLoading(false);
     }
@@ -62,12 +51,10 @@ function LoginPage() {
       >
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold tracking-tight text-foreground font-serif">
-            {isReset ? 'Reset password' : 'Welcome back'}
+            Create an account
           </h1>
           <p className="mt-2 text-sm text-muted-foreground font-sans">
-            {isReset 
-              ? 'Enter your email to receive a reset link' 
-              : 'Enter your details to sign in to your account'}
+            Add a new user to Nimmit Sevak
           </p>
         </div>
 
@@ -106,42 +93,26 @@ function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               className="mt-1 block w-full rounded-lg border border-input bg-background px-4 py-2 text-foreground placeholder:text-muted-foreground shadow-sm focus:border-primary focus:ring-1 focus:ring-primary sm:text-sm outline-none transition-colors"
-              placeholder="you@example.com"
+              placeholder="user@example.com"
             />
           </div>
-          
-          {!isReset && (
-            <div>
-              <div className="flex items-center justify-between">
-                <label
-                  htmlFor="password"
-                  className="block text-sm font-medium text-foreground"
-                >
-                  Password
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsReset(true);
-                    setError('');
-                    setSuccess('');
-                  }}
-                  className="text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
-                >
-                  Forgot password?
-                </button>
-              </div>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="mt-1 block w-full rounded-lg border border-input bg-background px-4 py-2 text-foreground placeholder:text-muted-foreground shadow-sm focus:border-primary focus:ring-1 focus:ring-primary sm:text-sm outline-none transition-colors"
-                placeholder="••••••••"
-              />
-            </div>
-          )}
+          <div>
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-foreground"
+            >
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="mt-1 block w-full rounded-lg border border-input bg-background px-4 py-2 text-foreground placeholder:text-muted-foreground shadow-sm focus:border-primary focus:ring-1 focus:ring-primary sm:text-sm outline-none transition-colors"
+              placeholder="••••••••"
+            />
+          </div>
 
           <button
             type="submit"
@@ -154,28 +125,11 @@ function LoginPage() {
                 Processing...
               </span>
             ) : (
-              isReset ? 'Send Reset Link' : 'Sign in'
+              'Create User'
             )}
           </button>
         </form>
-
-        {isReset && (
-          <div className="mt-6 text-center text-sm font-sans">
-            <button
-              type="button"
-              onClick={() => {
-                setIsReset(false);
-                setError('');
-                setSuccess('');
-              }}
-              className="font-bold text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-2 w-full"
-            >
-              ← Back to login
-            </button>
-          </div>
-        )}
       </motion.div>
     </div>
   );
 }
-

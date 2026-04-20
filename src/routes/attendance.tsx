@@ -3,7 +3,7 @@ import { ProtectedRoute } from '../components/ProtectedRoute';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Calendar, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { Search, Calendar, CheckCircle2, Save, Activity } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { ContactRow } from '../lib/database.types';
 import { mapContactRows } from '../lib/mappers';
@@ -27,6 +27,8 @@ export const Route = createFileRoute('/attendance')({
   },
   loaderDeps: ({ search: { date } }) => ({ date }),
   loader: async ({ deps: { date } }) => {
+    await supabase.auth.getSession();
+
     // Fetch all contacts
     const { data: contactsData, error: contactsError } = await supabase
       .from('contacts')
@@ -37,7 +39,8 @@ export const Route = createFileRoute('/attendance')({
     const { data: attendanceData, error: attendanceError } = await supabase
       .from('attendance_records')
       .select('*')
-      .eq('date', date);
+      .eq('date', date)
+      .eq('status', 'Present'); // Only load present records now
 
     if (contactsError) handleLoaderError('attendance:contacts', contactsError, null);
     if (attendanceError) handleLoaderError('attendance:records', attendanceError, null);
@@ -50,25 +53,78 @@ export const Route = createFileRoute('/attendance')({
       attendanceMap.set(record.contact_id, record);
     });
 
-    return { contacts, attendanceMap: Array.from(attendanceMap.entries()) };
+    return { contacts, dbAttendanceMap: Array.from(attendanceMap.entries()) };
   },
   component: AttendancePage,
 });
 
+  // Helper for proper title casing
+  const titleCase = (str: string | undefined | null) => {
+    if (!str) return '';
+    return str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  };
+
 function AttendancePage() {
   const navigate = useNavigate({ from: '/attendance' });
   const { date } = Route.useSearch();
-  const { contacts, attendanceMap: loadedAttendance } = Route.useLoaderData();
+  const { contacts: initialContacts, dbAttendanceMap: initialDbAttendanceMap } = Route.useLoaderData();
   
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Local state for optimistic UI updates
-  const [attendance, setAttendance] = useState<Map<string, any>>(new Map());
+  // Track client hydration and sync state 
+  const [contacts, setContacts] = useState<ContactRow[]>(initialContacts);
+  const [prevDate, setPrevDate] = useState(date);
+  
+  const [attendance, setAttendance] = useState<Map<string, any>>(() => new Map(initialDbAttendanceMap));
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [toastMessage, setToastMessage] = useState<{title: string, type: 'success' | 'error'} | null>(null);
 
-  // Restore the Map from the loader data
+  // Hydrate strictly client-side allowing Supabase SDK to securely rebuild identity token states before firing row level queries
   useEffect(() => {
-    setAttendance(new Map(loadedAttendance));
-  }, [loadedAttendance]);
+    const hydrateData = async () => {
+      // Fetch Contacts
+      const { data: contactsData } = await supabase.from('contacts').select('*').order('first_name');
+      if (contactsData) {
+        setContacts(mapContactRows(contactsData as ContactRow[]));
+      }
+      
+      // Fetch Attendance for Date
+      const { data: attendanceData } = await supabase
+        .from('attendance_records')
+        .select('*')
+        .eq('date', date)
+        .eq('status', 'Present');
+        
+      const freshMap = new Map<string, any>();
+      (attendanceData || []).forEach((record: any) => {
+        freshMap.set(record.contact_id, record);
+      });
+      
+      setAttendance(freshMap);
+      setHasUnsavedChanges(false);
+
+      // Now attempt to overlay local storage if there are unsaved drafts
+      try {
+        const localData = localStorage.getItem(`attendance_${date}`);
+        if (localData) {
+          const parsed = JSON.parse(localData);
+          setAttendance(new Map(parsed));
+          setHasUnsavedChanges(true); // There are unpersisted edits!
+        }
+      } catch (e) {
+        console.error('Failed to parse local storage attendance', e);
+      }
+    };
+    
+    hydrateData();
+  }, [date]); // Re-fetch all data safely when date changes client-side
+
+  // Synchronously catch navigation updates if TanStack `loader` triggers a date switch without remounting
+  if (date !== prevDate) {
+    setPrevDate(date);
+    setSearchQuery(''); 
+  }
 
   // Client-side Sorting and filtering logic
   const processedContacts = useMemo(() => {
@@ -104,46 +160,59 @@ function AttendancePage() {
     navigate({ search: { date: e.target.value } });
   };
 
-  const markAttendance = async (contactId: string, status: 'Present' | 'Absent' | 'Late' | 'Excused') => {
-    // Optimistic UI updates
-    const previousState = new Map(attendance);
-    const optimism = new Map(attendance);
-    optimism.set(contactId, { contact_id: contactId, date, status });
-    setAttendance(optimism);
-
-    const { error } = await supabase
-      .from('attendance_records')
-      .upsert({ 
-        contact_id: contactId, 
-        date, 
-        status 
-      }, { onConflict: 'contact_id,date' });
-
-    if (error) {
-      console.error('Failed to update attendance:', error);
-      // Revert optimistic update
-      setAttendance(previousState);
+  const toggleAttendance = (contactId: string) => {
+    const newAttendance = new Map(attendance);
+    
+    // If present, remove (implicit absence). If absent, set as Present.
+    if (newAttendance.has(contactId)) {
+      newAttendance.delete(contactId);
+    } else {
+      newAttendance.set(contactId, { contact_id: contactId, date, status: 'Present' });
     }
+    
+    setAttendance(newAttendance);
+    setHasUnsavedChanges(true);
+    
+    // Persist optimistic state to local storage to prevent data loss
+    localStorage.setItem(`attendance_${date}`, JSON.stringify(Array.from(newAttendance.entries())));
   };
 
-  const getStatusColor = (status: string) => {
-    switch(status) {
-      case 'Present': return 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-400';
-      case 'Absent': return 'bg-red-100 text-red-700 border-red-200 dark:bg-red-950 dark:border-red-800 dark:text-red-400';
-      case 'Late': return 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-400';
-      case 'Excused': return 'bg-primary/10 text-primary border-primary/20';
-      default: return 'bg-muted text-muted-foreground border-border';
+  const handleSaveAttendance = async () => {
+    setIsSaving(true);
+    try {
+      // Clean delete existing attendance for this date (so implicit absences are correctly handled)
+      await supabase.from('attendance_records').delete().eq('date', date);
+      
+      const recordsToInsert = Array.from(attendance.values()).map(r => ({
+        contact_id: r.contact_id,
+        date: r.date,
+        status: 'Present'
+      }));
+
+      if (recordsToInsert.length > 0) {
+        const { error } = await supabase.from('attendance_records').insert(recordsToInsert);
+        if (error) throw error;
+      }
+      
+      // Cleanup local storage 
+      localStorage.removeItem(`attendance_${date}`);
+      setHasUnsavedChanges(false);
+      
+      setToastMessage({ title: 'Attendance saved successfully!', type: 'success' });
+      setTimeout(() => setToastMessage(null), 5000);
+    } catch (e: any) {
+      console.error('Save failed:', e);
+      setToastMessage({ title: 'Failed to save attendance: ' + e.message, type: 'error' });
+      setTimeout(() => setToastMessage(null), 5000);
+    } finally {
+      setIsSaving(false);
     }
   };
 
   // Metrics calculation
-  const presentCount = Array.from(attendance.values()).filter(r => r.status === 'Present').length;
-  const absentCount = Array.from(attendance.values()).filter(r => r.status === 'Absent').length;
-  const lateCount = Array.from(attendance.values()).filter(r => r.status === 'Late').length;
   const totalMarked = attendance.size;
   const totalContacts = contacts.length;
-  
-  const presentRate = totalMarked > 0 ? Math.round((presentCount / totalMarked) * 100) : 0;
+  const presentRate = totalMarked > 0 ? Math.round((totalMarked / totalContacts) * 100) : 0;
 
   const [activeTab, setActiveTab] = useState<'list' | 'metrics'>('list');
 
@@ -155,13 +224,13 @@ function AttendancePage() {
         <div className="md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center justify-center rounded-full bg-foreground shadow-2xl p-1 gap-1">
           <button
             onClick={() => setActiveTab('list')}
-            className={`rounded-full px-5 py-2 text-sm font-bold transition-all ${activeTab === 'list' ? 'bg-background text-foreground shadow-sm' : 'text-background/70 hover:text-background'}`}
+            className={`rounded-full px-5 py-2 text-sm font-bold transition-all outline-none ${activeTab === 'list' ? 'bg-background text-foreground shadow-sm' : 'text-background/70 hover:text-background'}`}
           >
             List
           </button>
           <button
             onClick={() => setActiveTab('metrics')}
-            className={`rounded-full px-5 py-2 text-sm font-bold transition-all ${activeTab === 'metrics' ? 'bg-background text-foreground shadow-sm' : 'text-background/70 hover:text-background'}`}
+            className={`rounded-full px-5 py-2 text-sm font-bold transition-all outline-none ${activeTab === 'metrics' ? 'bg-background text-foreground shadow-sm' : 'text-background/70 hover:text-background'}`}
           >
             Metrics
           </button>
@@ -170,7 +239,18 @@ function AttendancePage() {
         {/* Left Pane - Master List  */}
         <div className={`relative h-full w-full flex-col border-r border-border bg-card md:w-[450px] xl:w-[500px] ${activeTab === 'list' ? 'flex' : 'hidden md:flex'}`}>
           <div className="z-10 flex-shrink-0 bg-card/80 p-4 pt-6 backdrop-blur-xl">
-            <h1 className="text-2xl font-bold tracking-tight text-foreground font-serif">Attendance List</h1>
+            <div className="flex items-center justify-between">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground font-serif">Attendance</h1>
+              
+              <button 
+                onClick={handleSaveAttendance}
+                disabled={!hasUnsavedChanges || isSaving}
+                className="hidden md:flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground shadow flex-shrink-0 disabled:opacity-50 disabled:grayscale transition-all"
+              >
+                {isSaving ? <Activity className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {isSaving ? 'Saving...' : 'Save Draft'}
+              </button>
+            </div>
             
             <motion.div className="relative mt-4">
               <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -196,8 +276,7 @@ function AttendancePage() {
             >
               {virtualizer.getVirtualItems().map((virtualItem) => {
                 const contact = processedContacts[virtualItem.index];
-                const record = attendance.get(contact.id);
-                const currentStatus = record?.status;
+                const isPresent = attendance.has(contact.id);
 
                 return (
                   <div
@@ -222,7 +301,7 @@ function AttendancePage() {
                         />
                         <div className="flex flex-col truncate">
                           <span className="truncate text-sm font-medium text-foreground tracking-tight py-0.5">
-                            {contact.firstName} <span className="font-bold">{contact.lastName}</span>
+                            {titleCase(contact.firstName)} <span className="font-bold">{titleCase(contact.lastName)}</span>
                           </span>
                           {contact.mandal && (
                             <span className="truncate text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider w-fit">
@@ -238,31 +317,11 @@ function AttendancePage() {
                           <motion.button
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
-                            onClick={() => markAttendance(contact.id, 'Present')}
-                            className={`flex h-8 w-8 items-center justify-center rounded-full border transition-all ${currentStatus === 'Present' ? 'bg-emerald-500 border-emerald-600 text-white shadow-md' : 'border-border bg-card text-muted-foreground hover:border-emerald-500 hover:text-emerald-500'}`}
-                            title="Present"
+                            onClick={() => toggleAttendance(contact.id)}
+                            className={`flex h-8 w-8 items-center justify-center rounded-full border transition-all ${isPresent ? 'bg-emerald-500 border-emerald-600 text-white shadow-md' : 'border-border bg-card text-muted-foreground hover:border-emerald-500 hover:text-emerald-500'}`}
+                            title={isPresent ? "Marked Present" : "Mark Present"}
                           >
                             <CheckCircle2 className="h-5 w-5" />
-                          </motion.button>
-                          
-                          <motion.button
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={() => markAttendance(contact.id, 'Absent')}
-                            className={`flex h-8 w-8 items-center justify-center rounded-full border transition-all ${currentStatus === 'Absent' ? 'bg-red-500 border-red-600 text-white shadow-md' : 'border-border bg-card text-muted-foreground hover:border-red-500 hover:text-red-500'}`}
-                            title="Absent"
-                          >
-                            <XCircle className="h-5 w-5" />
-                          </motion.button>
-
-                          <motion.button
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={() => markAttendance(contact.id, 'Late')}
-                            className={`flex h-8 w-8 items-center justify-center rounded-full border transition-all ${currentStatus === 'Late' ? 'bg-amber-500 border-amber-600 text-white shadow-md' : 'border-border bg-card text-muted-foreground hover:border-amber-500 hover:text-amber-500'}`}
-                            title="Late"
-                          >
-                            <Clock className="h-4 w-4" />
                           </motion.button>
                         </AnimatePresence>
                       </div>
@@ -284,102 +343,114 @@ function AttendancePage() {
             animate={{ opacity: 1, y: 0 }}
             className="mx-auto w-full max-w-3xl"
           >
-            <div className="flex items-center justify-between mb-8">
+            {/* Improved Header for Small Viewports */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
               <div>
                 <h2 className="text-3xl font-bold tracking-tight text-foreground font-serif">Daily Overview</h2>
                 <p className="mt-1 text-muted-foreground font-sans">Review attendance metrics and manage records.</p>
               </div>
-              <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-2 pr-4 shadow-sm font-sans">
-                <div className="flex items-center justify-center rounded-lg bg-primary/10 p-2">
-                  <Calendar className="h-5 w-5 text-primary" />
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-2 pr-4 shadow-sm font-sans flex-shrink-0">
+                  <div className="flex items-center justify-center rounded-lg bg-primary/10 p-2">
+                    <Calendar className="h-5 w-5 text-primary" />
+                  </div>
+                  <input 
+                    type="date"
+                    value={date}
+                    onChange={handleDateChange}
+                    className="bg-transparent text-sm font-medium text-foreground focus:outline-none w-full"
+                  />
                 </div>
-                <input 
-                  type="date"
-                  value={date}
-                  onChange={handleDateChange}
-                  className="bg-transparent text-sm font-medium text-foreground focus:outline-none"
-                />
+                
+                {/* Mobile CTA */}
+                <button 
+                  onClick={handleSaveAttendance}
+                  disabled={!hasUnsavedChanges || isSaving}
+                  className="md:hidden flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow disabled:opacity-50 disabled:grayscale transition-all w-full"
+                >
+                  {isSaving ? <Activity className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {isSaving ? 'Saving...' : 'Save Draft'}
+                </button>
               </div>
             </div>
 
+            {hasUnsavedChanges && (
+              <div className="mb-6 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 p-4 text-sm font-semibold text-amber-800 dark:text-amber-400 font-sans flex items-center">
+                <span className="w-2 h-2 rounded-full bg-amber-500 mr-3 animate-pulse"></span>
+                You have unsaved attendance changes. Remember to hit save!
+              </div>
+            )}
+
             {/* Metrics Grid */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 font-sans">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 font-sans">
               <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-                <p className="text-sm font-medium text-muted-foreground">Total Marked</p>
+                <p className="text-sm font-medium text-muted-foreground">Total Network Size</p>
                 <div className="mt-2 flex items-baseline gap-2">
-                  <span className="text-4xl font-bold text-foreground font-serif">{totalMarked}</span>
-                  <span className="text-sm text-muted-foreground">of {totalContacts}</span>
-                </div>
-                <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-muted">
-                  <div 
-                    className="h-full bg-primary transition-all duration-500" 
-                    style={{ width: `${totalContacts > 0 ? (totalMarked / totalContacts) * 100 : 0}%` }}
-                  />
+                  <span className="text-4xl font-bold text-foreground font-serif">{totalContacts}</span>
                 </div>
               </div>
 
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm dark:border-emerald-900/30 dark:bg-emerald-950/20">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="h-5 w-5 text-emerald-600 hover:scale-105 transition-transform" />
-                  <p className="text-sm font-medium text-emerald-800 dark:text-emerald-400">Present</p>
+                  <p className="text-sm font-medium text-emerald-800 dark:text-emerald-400">Total Present</p>
                 </div>
                 <div className="mt-2 flex items-baseline gap-2">
-                  <span className="text-4xl font-bold text-emerald-700 dark:text-emerald-300 font-serif">{presentCount}</span>
+                  <span className="text-4xl font-bold text-emerald-700 dark:text-emerald-300 font-serif">{totalMarked}</span>
                 </div>
-                <p className="mt-1 text-sm font-medium text-emerald-600 dark:text-emerald-500">{presentRate}% of marked</p>
-              </div>
-
-              <div className="rounded-2xl border border-red-200 bg-red-50 p-6 shadow-sm dark:border-red-900/30 dark:bg-red-950/20">
-                <div className="flex items-center gap-2">
-                  <XCircle className="h-5 w-5 text-red-600 hover:scale-105 transition-transform" />
-                  <p className="text-sm font-medium text-red-800 dark:text-red-400">Absent</p>
-                </div>
-                <div className="mt-2 flex items-baseline gap-2">
-                  <span className="text-4xl font-bold text-red-700 dark:text-red-300 font-serif">{absentCount}</span>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-sm dark:border-amber-900/30 dark:bg-amber-950/20">
-                <div className="flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-amber-600 hover:scale-105 transition-transform" />
-                  <p className="text-sm font-medium text-amber-800 dark:text-amber-400">Late</p>
-                </div>
-                <div className="mt-2 flex items-baseline gap-2">
-                  <span className="text-4xl font-bold text-amber-700 dark:text-amber-300 font-serif">{lateCount}</span>
-                </div>
+                <p className="mt-1 text-sm font-medium text-emerald-600 dark:text-emerald-500">{presentRate}% of total network</p>
               </div>
             </div>
 
             {/* Quick Actions / Summary List */}
             <div className="mt-8 rounded-2xl border border-border bg-card shadow-sm overflow-hidden font-sans">
               <div className="border-b border-border bg-muted/50 px-6 py-4">
-                <h3 className="text-sm font-bold text-foreground font-serif tracking-tight">Recent Updates</h3>
+                <h3 className="text-sm font-bold text-foreground font-serif tracking-tight">Recent Updates (Present)</h3>
               </div>
               <div className="divide-y divide-border">
-                {Array.from(attendance.values()).slice(-5).reverse().map((record: any, idx) => {
+                {Array.from(attendance.values()).slice(-10).reverse().map((record: any) => {
                   const contact = contacts.find(c => c.id === record.contact_id);
                   if (!contact) return null;
                   
                   return (
-                    <div key={idx} className="flex items-center justify-between px-6 py-3">
+                    <div key={contact.id} className="flex items-center justify-between px-6 py-3">
                       <div className="flex items-center gap-3">
                         <img src={contact.avatarUrl} className="h-8 w-8 rounded-full border border-border" alt="" />
-                        <span className="text-sm font-medium text-foreground">{contact.firstName} {contact.lastName}</span>
+                        <span className="text-sm font-medium text-foreground">{titleCase(contact.firstName)} {titleCase(contact.lastName)}</span>
                       </div>
-                      <span className={`px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wider font-bold border ${getStatusColor(record.status)}`}>
-                        {record.status}
+                      <span className="px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wider font-bold border bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-400">
+                        Present
                       </span>
                     </div>
                   );
                 })}
                 {attendance.size === 0 && (
-                  <div className="p-8 text-center text-sm text-muted-foreground">No attendance marked for this date.</div>
+                  <div className="p-8 text-center text-sm text-muted-foreground">Nobody has been marked present for this date.</div>
                 )}
               </div>
             </div>
             
           </motion.div>
         </div>
+
+        {/* Global Action Toast Notification */}
+        <AnimatePresence>
+          {toastMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: 50, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 50, scale: 0.9 }}
+              className={`fixed bottom-6 right-6 z-[100] flex items-center gap-3 rounded-xl px-5 py-4 shadow-2xl font-sans ${
+                toastMessage.type === 'success' 
+                  ? 'bg-emerald-600 text-white' 
+                  : 'bg-red-600 text-white'
+              }`}
+            >
+              {toastMessage.type === 'success' ? <CheckCircle2 className="h-6 w-6" /> : <Activity className="h-6 w-6" />}
+              <span className="text-sm font-bold tracking-wide">{toastMessage.title}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
       </div>
     </ProtectedRoute>

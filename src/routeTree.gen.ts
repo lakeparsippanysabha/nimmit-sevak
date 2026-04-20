@@ -9,7 +9,9 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as UpdatePasswordRouteImport } from './routes/update-password'
 import { Route as TravelRouteImport } from './routes/travel'
+import { Route as SignupRouteImport } from './routes/signup'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as JournalRouteImport } from './routes/journal'
 import { Route as ContactsRouteImport } from './routes/contacts'
@@ -17,9 +19,19 @@ import { Route as AttendanceRouteImport } from './routes/attendance'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 
+const UpdatePasswordRoute = UpdatePasswordRouteImport.update({
+  id: '/update-password',
+  path: '/update-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TravelRoute = TravelRouteImport.update({
   id: '/travel',
   path: '/travel',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -60,7 +72,9 @@ export interface FileRoutesByFullPath {
   '/contacts': typeof ContactsRoute
   '/journal': typeof JournalRoute
   '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
   '/travel': typeof TravelRoute
+  '/update-password': typeof UpdatePasswordRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -69,7 +83,9 @@ export interface FileRoutesByTo {
   '/contacts': typeof ContactsRoute
   '/journal': typeof JournalRoute
   '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
   '/travel': typeof TravelRoute
+  '/update-password': typeof UpdatePasswordRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -79,7 +95,9 @@ export interface FileRoutesById {
   '/contacts': typeof ContactsRoute
   '/journal': typeof JournalRoute
   '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
   '/travel': typeof TravelRoute
+  '/update-password': typeof UpdatePasswordRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -90,7 +108,9 @@ export interface FileRouteTypes {
     | '/contacts'
     | '/journal'
     | '/login'
+    | '/signup'
     | '/travel'
+    | '/update-password'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -99,7 +119,9 @@ export interface FileRouteTypes {
     | '/contacts'
     | '/journal'
     | '/login'
+    | '/signup'
     | '/travel'
+    | '/update-password'
   id:
     | '__root__'
     | '/'
@@ -108,7 +130,9 @@ export interface FileRouteTypes {
     | '/contacts'
     | '/journal'
     | '/login'
+    | '/signup'
     | '/travel'
+    | '/update-password'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -118,16 +142,32 @@ export interface RootRouteChildren {
   ContactsRoute: typeof ContactsRoute
   JournalRoute: typeof JournalRoute
   LoginRoute: typeof LoginRoute
+  SignupRoute: typeof SignupRoute
   TravelRoute: typeof TravelRoute
+  UpdatePasswordRoute: typeof UpdatePasswordRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/update-password': {
+      id: '/update-password'
+      path: '/update-password'
+      fullPath: '/update-password'
+      preLoaderRoute: typeof UpdatePasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/travel': {
       id: '/travel'
       path: '/travel'
       fullPath: '/travel'
       preLoaderRoute: typeof TravelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -182,7 +222,9 @@ const rootRouteChildren: RootRouteChildren = {
   ContactsRoute: ContactsRoute,
   JournalRoute: JournalRoute,
   LoginRoute: LoginRoute,
+  SignupRoute: SignupRoute,
   TravelRoute: TravelRoute,
+  UpdatePasswordRoute: UpdatePasswordRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
