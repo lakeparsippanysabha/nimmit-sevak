@@ -44,3 +44,23 @@ export function mapContactRow(row: ContactRow): Contact {
 export function mapContactRows(rows: ContactRow[]): Contact[] {
   return rows.map(mapContactRow);
 }
+
+import type { FollowupListRow } from './database.types';
+import type { FollowupList } from './types';
+
+export function mapFollowupListRow(row: FollowupListRow): FollowupList {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description ?? undefined,
+    isPublic: row.is_public,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapFollowupListRows(rows: FollowupListRow[]): FollowupList[] {
+  return rows.map(mapFollowupListRow);
+}
+

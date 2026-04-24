@@ -16,9 +16,11 @@ export default function Header() {
 
   const navLinks = [
     { to: '/contacts', label: 'Contacts', search: undefined },
+    { to: '/lists', label: 'Lists', search: undefined },
     { to: '/attendance', label: 'Attendance', search: undefined },
     { to: '/travel', label: 'Vicharan', search: { date: new Date().toISOString().split('T')[0] } },
     { to: '/journal', label: 'Smruties', search: { stopId: undefined } },
+
   ];
 
   return (

@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase';
 import { handleMutationError } from '../lib/errors';
 import { MediaUploader, type UploadedMedia } from '../components/MediaUploader';
 import { MediaGalleries } from '../components/MediaGalleries';
+import { useConfirm } from '../contexts/ConfirmContext';
+import { useToast } from '../contexts/ToastContext';
 import { PenLine, Send, Calendar as CalendarIcon, MapPin, Loader2, Navigation, Edit2, Check, X, ChevronLeft, ChevronRight, BookOpen } from 'lucide-react';
 import { format } from 'date-fns';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -58,6 +60,8 @@ function JournalPage() {
   const { date, entries: initialEntries, plans: initialPlans } = Route.useLoaderData();
   const { stopId } = Route.useSearch();
   const router = useRouter();
+  const { confirm } = useConfirm();
+  const { toast } = useToast();
 
   const [entries, setEntries] = useState<any[]>(initialEntries);
   const [plans, setPlans] = useState<any[]>(initialPlans);
@@ -96,8 +100,6 @@ function JournalPage() {
   const [content, setContent] = useState('');
   const [pendingMedia, setPendingMedia] = useState<UploadedMedia[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  const [toastMessage, setToastMessage] = useState<{title: string, type: 'success' | 'error'} | null>(null);
 
   // Calendar Engine
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -196,7 +198,7 @@ function JournalPage() {
   }, []);
 
   const handleDeleteExistingMedia = async (media: any) => {
-    if (!confirm('Are you sure you want to permanently delete this media file?')) return;
+    if (!(await confirm({ title: 'Delete Media', description: 'Are you sure you want to permanently delete this media file?', confirmText: 'Delete', danger: true }))) return;
     try {
        await supabase.storage.from('journal-media').remove([media.file_path]);
        await supabase.from('journal_media').delete().eq('id', media.id);
@@ -376,7 +378,7 @@ function JournalPage() {
                 <div className="mt-3">
                   <MediaUploader 
                      onFilesUploaded={handleMediaUploaded} 
-                     onUploadError={(msg) => setToastMessage({title: msg, type: 'error'})} 
+                     onUploadError={(msg) => toast(msg, 'error')} 
                   />
                 </div>
 
@@ -496,7 +498,7 @@ function JournalPage() {
                            <div className="mt-4">
                              <MediaUploader 
                                onFilesUploaded={handleEditMediaUploaded} 
-                               onUploadError={(msg) => setToastMessage({title: msg, type: 'error'})}
+                               onUploadError={(msg) => toast(msg, 'error')}
                              />
                            </div>
                          </div>
@@ -539,26 +541,6 @@ function JournalPage() {
           </div>
 
         </div>
-        
-        {/* Global Action Toast Notification */}
-        <AnimatePresence>
-          {toastMessage && (
-            <motion.div
-              initial={{ opacity: 0, y: 50, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 50, scale: 0.9 }}
-              className={`fixed bottom-6 right-6 z-[100] flex items-center gap-3 rounded-xl px-5 py-4 shadow-2xl font-sans ${
-                toastMessage.type === 'success' 
-                  ? 'bg-emerald-600 text-white' 
-                  : 'bg-red-600 text-white'
-              }`}
-            >
-              <span className="text-sm font-bold tracking-wide">{toastMessage.title}</span>
-              <button onClick={() => setToastMessage(null)} className="ml-2 hover:bg-white/20 p-1 rounded-md transition-colors"><X className="h-4 w-4" /></button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
       </div>
     </ProtectedRoute>
   );

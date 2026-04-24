@@ -13,6 +13,8 @@ import type { ContactRow } from '../lib/database.types';
 import { mapContactRows } from '../lib/mappers';
 import type { Contact } from '../data/mockContacts';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
+
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
@@ -75,6 +77,7 @@ function TravelPage() {
   const navigate = useNavigate({ from: '/travel' });
   const { date, planId: initialPlanId, savedStops, contacts, itineraryDates } = Route.useLoaderData();
   const { role } = useAuth();
+  const { toast } = useToast();
   const isAdmin = role === 'Super Admin' || role === 'Admin';
   
   const [currentPlanId, setCurrentPlanId] = useState<string | null>(initialPlanId);
@@ -235,7 +238,7 @@ function TravelPage() {
   const handleContactSelection = async (contact: Contact) => {
     const fullAddress = `${contact.address1 || ''} ${contact.city || ''} ${contact.state || ''} ${contact.zip || ''}`.trim();
     if (!fullAddress) {
-      alert("This contact does not have a saved address to route to.");
+      toast("This contact does not have a saved address to route to.", "error");
       return;
     }
     
@@ -251,7 +254,7 @@ function TravelPage() {
       });
       setStagedTitle(`${contact.firstName} ${contact.lastName}`);
     } else {
-      alert("Address could not be mapped reliably.");
+      toast("Address could not be mapped reliably.", "error");
     }
   };
 
@@ -342,11 +345,9 @@ function TravelPage() {
     
     try {
       await navigator.clipboard.writeText(msg);
-      setToastMessage({ title: 'Itinerary copied to clipboard!', type: 'success' });
-      setTimeout(() => setToastMessage(null), 5000);
+      toast('Itinerary copied to clipboard!', 'success');
     } catch (err: any) {
-      setToastMessage({ title: 'Failed to copy: ' + err.message, type: 'error' });
-      setTimeout(() => setToastMessage(null), 5000);
+      toast('Failed to copy: ' + err.message, 'error');
     }
   };
 

@@ -13,6 +13,7 @@ import { Route as UpdatePasswordRouteImport } from './routes/update-password'
 import { Route as TravelRouteImport } from './routes/travel'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ListsRouteImport } from './routes/lists'
 import { Route as JournalRouteImport } from './routes/journal'
 import { Route as ContactsRouteImport } from './routes/contacts'
 import { Route as AttendanceRouteImport } from './routes/attendance'
@@ -37,6 +38,11 @@ const SignupRoute = SignupRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ListsRoute = ListsRouteImport.update({
+  id: '/lists',
+  path: '/lists',
   getParentRoute: () => rootRouteImport,
 } as any)
 const JournalRoute = JournalRouteImport.update({
@@ -71,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/attendance': typeof AttendanceRoute
   '/contacts': typeof ContactsRoute
   '/journal': typeof JournalRoute
+  '/lists': typeof ListsRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/travel': typeof TravelRoute
@@ -82,6 +89,7 @@ export interface FileRoutesByTo {
   '/attendance': typeof AttendanceRoute
   '/contacts': typeof ContactsRoute
   '/journal': typeof JournalRoute
+  '/lists': typeof ListsRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/travel': typeof TravelRoute
@@ -94,6 +102,7 @@ export interface FileRoutesById {
   '/attendance': typeof AttendanceRoute
   '/contacts': typeof ContactsRoute
   '/journal': typeof JournalRoute
+  '/lists': typeof ListsRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/travel': typeof TravelRoute
@@ -107,6 +116,7 @@ export interface FileRouteTypes {
     | '/attendance'
     | '/contacts'
     | '/journal'
+    | '/lists'
     | '/login'
     | '/signup'
     | '/travel'
@@ -118,6 +128,7 @@ export interface FileRouteTypes {
     | '/attendance'
     | '/contacts'
     | '/journal'
+    | '/lists'
     | '/login'
     | '/signup'
     | '/travel'
@@ -129,6 +140,7 @@ export interface FileRouteTypes {
     | '/attendance'
     | '/contacts'
     | '/journal'
+    | '/lists'
     | '/login'
     | '/signup'
     | '/travel'
@@ -141,6 +153,7 @@ export interface RootRouteChildren {
   AttendanceRoute: typeof AttendanceRoute
   ContactsRoute: typeof ContactsRoute
   JournalRoute: typeof JournalRoute
+  ListsRoute: typeof ListsRoute
   LoginRoute: typeof LoginRoute
   SignupRoute: typeof SignupRoute
   TravelRoute: typeof TravelRoute
@@ -175,6 +188,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lists': {
+      id: '/lists'
+      path: '/lists'
+      fullPath: '/lists'
+      preLoaderRoute: typeof ListsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/journal': {
@@ -221,6 +241,7 @@ const rootRouteChildren: RootRouteChildren = {
   AttendanceRoute: AttendanceRoute,
   ContactsRoute: ContactsRoute,
   JournalRoute: JournalRoute,
+  ListsRoute: ListsRoute,
   LoginRoute: LoginRoute,
   SignupRoute: SignupRoute,
   TravelRoute: TravelRoute,

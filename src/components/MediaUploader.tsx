@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { supabase } from '../lib/supabase';
+import { useToast } from '../contexts/ToastContext';
 import { UploadCloud, Loader2 } from 'lucide-react';
 
 export interface UploadedMedia {
@@ -10,13 +11,14 @@ export interface UploadedMedia {
 }
 
 export function MediaUploader({ onFilesUploaded, onUploadError }: { onFilesUploaded: (files: UploadedMedia[]) => void, onUploadError?: (msg: string) => void }) {
+  const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{current: number, total: number}>({current: 0, total: 0});
 
   const onDrop = useCallback(async (acceptedFiles: File[], rejectedFiles: any[]) => {
     if (rejectedFiles.length > 0) {
       if (onUploadError) onUploadError("Some files were rejected. Only images, video, and audio under 50MB are allowed.");
-      else alert("Some files were rejected. Only images, video, and audio under 50MB are allowed.");
+      else toast("Some files were rejected. Only images, video, and audio under 50MB are allowed.", "error");
     }
     
     if (acceptedFiles.length === 0) return;

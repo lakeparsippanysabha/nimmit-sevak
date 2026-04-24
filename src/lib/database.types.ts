@@ -90,7 +90,24 @@ export interface JournalMediaRow {
   caption: string | null;
 }
 
+export interface FollowupListRow {
+  id: string;
+  name: string;
+  description: string | null;
+  is_public: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FollowupListContactRow {
+  list_id: string;
+  contact_id: string;
+  added_at: string;
+}
+
 // ──────────────────────────────────────────────
+
 // Insert Types (what you INSERT into the database)
 // ──────────────────────────────────────────────
 
@@ -100,3 +117,5 @@ export type TravelPlanInsert = Pick<TravelPlanRow, 'date'>;
 export type TravelStopInsert = Omit<TravelStopRow, 'id'>;
 export type JournalEntryInsert = Omit<JournalEntryRow, 'id' | 'created_at'>;
 export type JournalMediaInsert = Omit<JournalMediaRow, 'id'>;
+export type FollowupListInsert = Omit<FollowupListRow, 'id' | 'created_at' | 'updated_at'>;
+export type FollowupListContactInsert = Omit<FollowupListContactRow, 'added_at'>;
