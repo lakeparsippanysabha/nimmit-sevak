@@ -22,14 +22,15 @@ This guide provides the necessary context for coding agents to work effectively 
 - **Profiles**: User profiles linked to Supabase Auth.
 
 ## Design System (Warm Minimalist)
-- **Visual Identity**: Professional, clean, and warm. Avoid "generic" colors.
+See `DESIGN.md` for the complete design system specification.
+- **Visual Identity**: Professional, clean, and warm. Avoid "generic" Tailwind colors (no `blue-500`, `gray-900`). ALWAYS use semantic theme variables.
 - **Colors (OKLCH)**:
-    - Background: Warm White (`oklch(0.99 0.01 75)`)
-    - Foreground: Warm Slate (`oklch(0.2 0.02 50)`)
-    - Primary: Terracotta/Amber (`oklch(0.65 0.15 45)`)
+    - Semantic tokens defined in `src/styles.css` (`bg-background`, `text-primary`, etc.).
+    - Core theme is based on Warm Whites, Deep Warm Slates, and Terracotta/Amber accents.
 - **Typography**:
-    - **Serif**: `Fraunces` (for headings).
-    - **Sans-Serif**: `Geist Variable` (for body text).
+    - **Serif**: `Fraunces` (`font-serif` for headings).
+    - **Sans-Serif**: `Geist Variable` (`font-sans` for body text).
+- **Interactions**: Mobile-first touch targets (`>=44px`), no native alerts, rich micro-animations via `framer-motion`.
 
 ## Core Patterns
 1. **Loaders**: Use TanStack Router `loader` for data fetching before rendering.
