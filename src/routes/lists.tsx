@@ -1,24 +1,21 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { ProtectedRoute } from '../components/ProtectedRoute';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Users, Globe, Lock, List, Save, Trash2, Edit2, UserPlus, X, RefreshCw, Download } from 'lucide-react';
+import { Plus, Users, Globe, Lock, List, Save, Trash2, UserPlus, X, RefreshCw, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { ContactSelectorModal } from '../components/ContactSelectorModal';
-import { mapContactRows, mapFollowupListRows } from '../lib/mappers';
-import type { ContactRow, FollowupListRow, FollowupListContactRow } from '../lib/database.types';
+import { mapContactRows, mapFollowupListRows, mapContactFollowupRows } from '../lib/mappers';
+import type { ContactRow, FollowupListRow, ContactFollowupRow } from '../lib/database.types';
 import type { Contact } from '../data/mockContacts';
-import type { FollowupList, FollowupListWithContacts } from '../lib/types';
+import type { FollowupList, ContactFollowup } from '../lib/types';
 import { handleLoaderError } from '../lib/errors';
 
 export const Route = createFileRoute('/lists')({
   loader: async () => {
-    const { data: session } = await supabase.auth.getSession();
-    const userId = session.session?.user.id;
-
     // Load contacts
     const { data: contactsData, error: contactsError } = await supabase
       .from('contacts')
@@ -26,7 +23,7 @@ export const Route = createFileRoute('/lists')({
       .limit(10000)
       .order('first_name');
 
-    if (contactsError) return handleLoaderError('contacts', contactsError, { contacts: [], lists: [], initialListContacts: [] });
+    if (contactsError) return handleLoaderError('contacts', contactsError, { contacts: [], lists: [], initialListContacts: [], followups: [] });
 
     // Load visible lists
     const listsQuery = supabase
@@ -38,7 +35,7 @@ export const Route = createFileRoute('/lists')({
     // RLS handles visibility but we'll just fetch all viewable ones
     const { data: listsData, error: listsError } = await listsQuery;
     
-    if (listsError) return handleLoaderError('lists', listsError, { contacts: [], lists: [], initialListContacts: [] });
+    if (listsError) return handleLoaderError('lists', listsError, { contacts: [], lists: [], initialListContacts: [], followups: [] });
 
     // Load list contacts mapping
     const listIds = listsData?.map(l => l.id) || [];
@@ -53,10 +50,22 @@ export const Route = createFileRoute('/lists')({
       listContacts = lcData || [];
     }
 
+    const contactIds = Array.from(new Set(listContacts.map(lc => lc.contact_id)));
+    let followups: any[] = [];
+    if (contactIds.length > 0) {
+      const { data: followupsData } = await supabase
+        .from('contact_followups')
+        .select('*')
+        .in('contact_id', contactIds)
+        .order('followup_date', { ascending: false });
+      followups = followupsData || [];
+    }
+
     return {
       contacts: mapContactRows((contactsData || []) as ContactRow[]),
       lists: mapFollowupListRows((listsData || []) as FollowupListRow[]),
       initialListContacts: listContacts,
+      followups: followups, // Not strictly mapped using mappers since it might not exist yet if they use old schema
     };
   },
   component: ListsPage,
@@ -71,6 +80,9 @@ function ListsPage() {
   const loaderData = Route.useLoaderData();
   const [contacts, setContacts] = useState<Contact[]>(loaderData.contacts);
   const [dbLists, setDbLists] = useState<FollowupList[]>(loaderData.lists);
+  const [followups, setFollowups] = useState<ContactFollowup[]>(
+    loaderData.followups ? mapContactFollowupRows(loaderData.followups as ContactFollowupRow[]) : []
+  );
   
   // Stored state: mapping list_id -> array of contact_ids
   const [listContactsMap, setListContactsMap] = useState<Record<string, string[]>>(() => {
@@ -103,12 +115,30 @@ function ListsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Follow-up State
+  const [isLogFollowupOpen, setIsLogFollowupOpen] = useState(false);
+  const [followupContactId, setFollowupContactId] = useState<string | null>(null);
+  const [followupReason, setFollowupReason] = useState<ContactFollowup['reason']>('Other');
+  const [followupDate, setFollowupDate] = useState(() => new Date().toISOString().substring(0, 10));
+  const [isLoggingFollowup, setIsLoggingFollowup] = useState(false);
+
   // Create List State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [newListDesc, setNewListDesc] = useState('');
   const [newListPublic, setNewListPublic] = useState(false);
   const [isCreatingList, setIsCreatingList] = useState(false);
+
+  // Update hasUnsavedChanges automatically
+  useEffect(() => {
+    if (editingListId) {
+      const originalIds = listContactsMap[editingListId] || [];
+      const isDifferent = draftContactIds.size !== originalIds.length || Array.from(draftContactIds).some(id => !originalIds.includes(id));
+      setHasUnsavedChanges(isDifferent);
+    } else {
+      setHasUnsavedChanges(false);
+    }
+  }, [editingListId, draftContactIds, listContactsMap]);
 
   // Read draft from session storage on mount
   useEffect(() => {
@@ -118,7 +148,6 @@ function ListsPage() {
       setEditingListId(draftId);
       try {
         setDraftContactIds(new Set(JSON.parse(draftContacts)));
-        setHasUnsavedChanges(true); // Assuming if it's there, it might be unsaved. Better check vs DB map later.
       } catch (e) {}
     }
   }, []);
@@ -142,19 +171,16 @@ function ListsPage() {
     }
     setEditingListId(listId);
     setDraftContactIds(new Set(listContactsMap[listId] || []));
-    setHasUnsavedChanges(false);
   };
 
   const handleRemoveFromDraft = (contactId: string) => {
     const newDraft = new Set(draftContactIds);
     newDraft.delete(contactId);
     setDraftContactIds(newDraft);
-    setHasUnsavedChanges(true);
   };
 
   const handleModalSave = (selectedIds: string[]) => {
     setDraftContactIds(new Set(selectedIds));
-    setHasUnsavedChanges(true);
   };
 
   const handleBulkSave = async () => {
@@ -191,7 +217,6 @@ function ListsPage() {
         ...prev,
         [editingListId]: currentDraftArray
       }));
-      setHasUnsavedChanges(false);
       toast('List saved successfully!', 'success');
       
     } catch (error) {
@@ -229,7 +254,6 @@ function ListsPage() {
       
       setEditingListId(newList.id);
       setDraftContactIds(new Set());
-      setHasUnsavedChanges(false);
       toast('List created successfully!', 'success');
 
     } catch (err) {
@@ -250,7 +274,6 @@ function ListsPage() {
       
       setEditingListId(null);
       setDraftContactIds(new Set());
-      setHasUnsavedChanges(false);
       setDbLists(prev => prev.filter(l => l.id !== activeList.id));
       toast('List deleted permanently.', 'success');
     } catch (err) {
@@ -278,6 +301,37 @@ function ListsPage() {
       // Revert UI
       setDbLists(prev => prev.map(l => l.id === activeList.id ? { ...l, isPublic: !targetState } : l));
       toast('Failed to change list visibility.', 'error');
+    }
+  };
+
+  const handleLogFollowup = async () => {
+    if (!followupContactId || !userId) return;
+    setIsLoggingFollowup(true);
+    try {
+      const { data, error } = await supabase
+        .from('contact_followups')
+        .insert({
+          contact_id: followupContactId,
+          reason: followupReason,
+          followup_date: new Date(followupDate).toISOString(),
+          created_by: userId,
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      const newFollowup = mapContactFollowupRows([data as ContactFollowupRow])[0];
+      setFollowups(prev => [newFollowup, ...prev]);
+      
+      setIsLogFollowupOpen(false);
+      setFollowupContactId(null);
+      toast('Follow-up logged successfully!', 'success');
+    } catch (err) {
+      console.error('Failed to log followup', err);
+      toast('Failed to log follow-up.', 'error');
+    } finally {
+      setIsLoggingFollowup(false);
     }
   };
 
@@ -500,34 +554,110 @@ function ListsPage() {
                            <button onClick={() => setIsModalOpen(true)} className="mt-4 text-primary text-sm font-bold hover:underline outline-none">Add your first contact</button>
                         </div>
                      ) : (
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                           {Array.from(draftContactIds).map(contactId => {
-                              const contact = contacts.find(c => c.id === contactId);
-                              if (!contact) return null;
-                              return (
-                                 <div key={contact.id} className="group relative flex items-center gap-4 p-4 rounded-2xl border border-border bg-card shadow-sm hover:border-primary/30 transition-all">
-                                    <img src={contact.avatarUrl} alt="" className="h-12 w-12 rounded-full object-cover border border-border shadow-sm" />
-                                    <div className="flex-1 min-w-0">
-                                       <h4 className="font-bold text-foreground text-[15px] truncate">
-                                          {contact.firstName} {contact.lastName} 
-                                          {contact.nickname && <span className="text-muted-foreground font-normal italic text-xs ml-1">"{contact.nickname}"</span>}
-                                       </h4>
-                                       <div className="flex items-center gap-2 mt-1 truncate">
-                                          {contact.cellphone && <span className="text-xs text-muted-foreground">{contact.cellphone}</span>}
-                                          {contact.cellphone && contact.mandal && <span className="text-muted-foreground/30">•</span>}
-                                          {contact.mandal && <span className="text-[10px] uppercase font-bold text-primary/70">{contact.mandal}</span>}
+                        <div className="space-y-8">
+                           {/* Calculate groupings */}
+                           {(() => {
+                              const FOUR_WEEKS_MS = 4 * 7 * 24 * 60 * 60 * 1000;
+                              const now = Date.now();
+                              const recentContacts: Contact[] = [];
+                              const waitingContacts: Contact[] = [];
+
+                              Array.from(draftContactIds).forEach(contactId => {
+                                 const contact = contacts.find(c => c.id === contactId);
+                                 if (!contact) return;
+                                 
+                                 const contactFollowups = followups.filter(f => f.contactId === contactId);
+                                 const latestFollowup = contactFollowups.length > 0 ? 
+                                    contactFollowups.reduce((latest, f) => new Date(f.followupDate) > new Date(latest.followupDate) ? f : latest) : null;
+                                 
+                                 if (!latestFollowup) {
+                                    waitingContacts.push(contact);
+                                 } else {
+                                    const followupDate = new Date(latestFollowup.followupDate).getTime();
+                                    if (now - followupDate > FOUR_WEEKS_MS) {
+                                       waitingContacts.push(contact);
+                                    } else {
+                                       recentContacts.push(contact);
+                                    }
+                                 }
+                              });
+
+                              const renderContactCard = (contact: Contact) => {
+                                 const contactFollowups = followups.filter(f => f.contactId === contact.id);
+                                 const latestFollowup = contactFollowups.length > 0 ? 
+                                    contactFollowups.reduce((latest, f) => new Date(f.followupDate) > new Date(latest.followupDate) ? f : latest) : null;
+
+                                 return (
+                                    <div key={contact.id} className="group relative flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 rounded-2xl border border-border bg-card shadow-sm hover:border-primary/30 transition-all">
+                                       <div className="flex items-center gap-4 w-full sm:w-auto flex-1 min-w-0">
+                                          <img src={contact.avatarUrl} alt="" className="h-12 w-12 rounded-full object-cover border border-border shadow-sm" />
+                                          <div className="flex-1 min-w-0">
+                                             <h4 className="font-bold text-foreground text-[15px] truncate pr-8">
+                                                {contact.firstName} {contact.lastName} 
+                                                {contact.nickname && <span className="text-muted-foreground font-normal italic text-xs ml-1">"{contact.nickname}"</span>}
+                                             </h4>
+                                             <div className="flex items-center gap-2 mt-1 truncate">
+                                                {contact.cellphone && <span className="text-xs text-muted-foreground">{contact.cellphone}</span>}
+                                                {contact.cellphone && contact.mandal && <span className="text-muted-foreground/30">•</span>}
+                                                {contact.mandal && <span className="text-[10px] uppercase font-bold text-primary/70">{contact.mandal.replace(/_/g, ' ')}</span>}
+                                             </div>
+                                             {latestFollowup && (
+                                                <div className="text-[11px] text-muted-foreground mt-1.5 flex items-center gap-1.5">
+                                                   <span className="font-semibold text-foreground/70">Last follow-up:</span> 
+                                                   {new Date(latestFollowup.followupDate).toLocaleDateString()} - {latestFollowup.reason}
+                                                </div>
+                                             )}
+                                          </div>
+                                       </div>
+                                       
+                                       <div className="flex w-full sm:w-auto items-center justify-end gap-2 mt-2 sm:mt-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-border">
+                                          <button 
+                                             onClick={() => {
+                                                setFollowupContactId(contact.id);
+                                                setIsLogFollowupOpen(true);
+                                             }}
+                                             className="text-xs font-bold text-primary hover:text-primary/80 bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-lg transition-colors outline-none"
+                                          >
+                                             Log Follow-up
+                                          </button>
+                                          <button 
+                                             onClick={() => handleRemoveFromDraft(contact.id)}
+                                             className="p-1.5 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 active:bg-destructive/20 rounded-lg transition-all outline-none"
+                                             title="Remove from list"
+                                          >
+                                             <X className="h-4 w-4" />
+                                          </button>
                                        </div>
                                     </div>
-                                     <button 
-                                      onClick={() => handleRemoveFromDraft(contact.id)}
-                                      className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 active:bg-destructive/20 rounded-full transition-all outline-none"
-                                      title="Remove from list"
-                                    >
-                                      <X className="h-4 w-4" />
-                                    </button>
-                                 </div>
+                                 );
+                              };
+
+                              return (
+                                 <>
+                                    {waitingContacts.length > 0 && (
+                                       <div>
+                                          <h3 className="text-xs font-bold uppercase tracking-widest text-amber-600 mb-3 flex items-center gap-2 bg-amber-500/10 w-fit px-3 py-1 rounded-full border border-amber-500/20">
+                                             Waiting Outreach
+                                          </h3>
+                                          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                             {waitingContacts.map(renderContactCard)}
+                                          </div>
+                                       </div>
+                                    )}
+
+                                    {recentContacts.length > 0 && (
+                                       <div>
+                                          <h3 className="text-xs font-bold uppercase tracking-widest text-emerald-600 mb-3 flex items-center gap-2 bg-emerald-500/10 w-fit px-3 py-1 rounded-full border border-emerald-500/20 mt-8">
+                                             Recent
+                                          </h3>
+                                          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                             {recentContacts.map(renderContactCard)}
+                                          </div>
+                                       </div>
+                                    )}
+                                 </>
                               );
-                           })}
+                           })()}
                         </div>
                      )}
                   </div>
@@ -544,6 +674,70 @@ function ListsPage() {
           alreadySelectedIds={Array.from(draftContactIds)}
           onSelectionComplete={handleModalSave}
         />
+
+        {/* Log Follow-up Modal */}
+        <AnimatePresence>
+          {isLogFollowupOpen && followupContactId && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="w-full max-w-sm overflow-hidden rounded-2xl border border-border bg-card shadow-2xl flex flex-col"
+              >
+                <div className="flex items-center justify-between border-b border-border p-4">
+                  <h2 className="text-xl font-bold font-serif text-foreground">Log Follow-up</h2>
+                  <button onClick={() => { setIsLogFollowupOpen(false); setFollowupContactId(null); }} className="rounded-full p-2 hover:bg-muted text-muted-foreground outline-none">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                
+                <div className="p-4 space-y-4 font-sans">
+                  <div>
+                    <label className="text-xs font-bold uppercase text-muted-foreground block mb-1">Reason *</label>
+                    <select 
+                      value={followupReason}
+                      onChange={e => setFollowupReason(e.target.value as ContactFollowup['reason'])}
+                      className="block w-full rounded-xl border border-input bg-background py-2 px-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all"
+                    >
+                      <option value="Mandir Event">Mandir Event</option>
+                      <option value="Sabha">Sabha</option>
+                      <option value="Shibir">Shibir</option>
+                      <option value="Seva">Seva</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold uppercase text-muted-foreground block mb-1">Date *</label>
+                    <input 
+                      type="date" 
+                      value={followupDate}
+                      onChange={e => setFollowupDate(e.target.value)}
+                      className="block w-full rounded-xl border border-input bg-background py-2 px-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="border-t border-border p-4 bg-card flex justify-end gap-3 font-sans">
+                  <button
+                    onClick={() => { setIsLogFollowupOpen(false); setFollowupContactId(null); }}
+                    className="rounded-xl border border-input bg-background px-4 py-2 text-sm font-bold text-foreground hover:bg-muted outline-none"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    disabled={isLoggingFollowup}
+                    onClick={handleLogFollowup}
+                    className="rounded-xl bg-primary px-6 py-2 text-sm font-bold text-primary-foreground hover:opacity-90 outline-none disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isLoggingFollowup ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
+                    Submit
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
         {/* Create List Modal */}
         <AnimatePresence>

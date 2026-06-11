@@ -35,6 +35,7 @@ export function mapContactRow(row: ContactRow): Contact {
     mandal: row.mandal ?? undefined,
     avatarUrl: row.avatar_url ?? undefined,
     notes: row.notes ?? undefined,
+    youthSabhaMember: row.youth_sabha_member,
   };
 }
 
@@ -62,5 +63,24 @@ export function mapFollowupListRow(row: FollowupListRow): FollowupList {
 
 export function mapFollowupListRows(rows: FollowupListRow[]): FollowupList[] {
   return rows.map(mapFollowupListRow);
+}
+
+import type { ContactFollowupRow } from './database.types';
+import type { ContactFollowup } from './types';
+
+export function mapContactFollowupRow(row: ContactFollowupRow): ContactFollowup {
+  return {
+    id: row.id,
+    contactId: row.contact_id,
+    reason: row.reason,
+    followupDate: row.followup_date,
+    notes: row.notes ?? null,
+    createdBy: row.created_by ?? null,
+    createdAt: row.created_at,
+  };
+}
+
+export function mapContactFollowupRows(rows: ContactFollowupRow[]): ContactFollowup[] {
+  return rows.map(mapContactFollowupRow);
 }
 

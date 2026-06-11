@@ -41,6 +41,7 @@ export interface ContactRow {
   mandal: string | null;
   avatar_url: string | null;
   notes: string | null;
+  youth_sabha_member: boolean;
   created_at: string;
 }
 
@@ -106,6 +107,16 @@ export interface FollowupListContactRow {
   added_at: string;
 }
 
+export interface ContactFollowupRow {
+  id: string;
+  contact_id: string;
+  reason: 'Mandir Event' | 'Sabha' | 'Shibir' | 'Seva' | 'Other';
+  followup_date: string;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
 // ──────────────────────────────────────────────
 
 // Insert Types (what you INSERT into the database)
@@ -119,3 +130,4 @@ export type JournalEntryInsert = Omit<JournalEntryRow, 'id' | 'created_at'>;
 export type JournalMediaInsert = Omit<JournalMediaRow, 'id'>;
 export type FollowupListInsert = Omit<FollowupListRow, 'id' | 'created_at' | 'updated_at'>;
 export type FollowupListContactInsert = Omit<FollowupListContactRow, 'added_at'>;
+export type ContactFollowupInsert = Omit<ContactFollowupRow, 'id' | 'created_at'>;

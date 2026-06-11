@@ -123,7 +123,7 @@ export function ContactSelectorModal({
                         {titleCase(contact.firstName)} {titleCase(contact.lastName)}
                       </span>
                       {contact.mandal && (
-                        <span className="text-xs text-muted-foreground">{contact.mandal}</span>
+                        <span className="text-xs text-muted-foreground">{contact.mandal.replace(/_/g, ' ')}</span>
                       )}
                     </div>
                   </div>

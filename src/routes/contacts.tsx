@@ -29,6 +29,21 @@ export const Route = createFileRoute('/contacts')({
 function ContactsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+  const [showYouthOnly, setShowYouthOnly] = useState(false);
+
+  const handleToggleYouth = async (id: string, newValue: boolean) => {
+    setFetchedContacts(prev => prev.map(c => c.id === id ? { ...c, youthSabhaMember: newValue } : c));
+    
+    const { error } = await supabase
+      .from('contacts')
+      .update({ youth_sabha_member: newValue })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Failed to update youth sabha status:', error);
+      setFetchedContacts(prev => prev.map(c => c.id === id ? { ...c, youthSabhaMember: !newValue } : c));
+    }
+  };
 
   const initialContacts = Route.useLoaderData();
   const [fetchedContacts, setFetchedContacts] = useState<Contact[]>(initialContacts);
@@ -58,6 +73,10 @@ function ContactsPage() {
         (c.email && c.email.toLowerCase().includes(q))
       );
     }
+    
+    if (showYouthOnly) {
+      filtered = filtered.filter(c => c.youthSabhaMember);
+    }
 
     // Sort Alphabetically
     filtered.sort((a, b) => {
@@ -67,7 +86,7 @@ function ContactsPage() {
     });
 
     return filtered;
-  }, [fetchedContacts, searchQuery]);
+  }, [fetchedContacts, searchQuery, showYouthOnly]);
 
   // A-Z Grouping extraction
   const { groupedItems, letterMap } = useMemo(() => {
@@ -151,6 +170,19 @@ function ContactsPage() {
                 </button>
               )}
             </motion.div>
+            
+            <div className="mt-4 flex items-center justify-between font-sans px-1">
+              <label className="text-sm font-medium text-foreground flex items-center gap-3 cursor-pointer group">
+                <button
+                  type="button"
+                  onClick={() => setShowYouthOnly(!showYouthOnly)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showYouthOnly ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+                >
+                  <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${showYouthOnly ? 'translate-x-4' : 'translate-x-1'}`} />
+                </button>
+                <span className="group-hover:text-primary transition-colors">Youth Sabha Members Only</span>
+              </label>
+            </div>
           </div>
 
           {/* Virtualized Container */}
@@ -292,12 +324,12 @@ function ContactsPage() {
                      {selectedContact.nickname && <span className="text-muted-foreground mr-1 italic">"{titleCase(selectedContact.nickname)}"</span>}
                      {selectedContact.memberType && (
                        <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-                         {selectedContact.memberType}
+                         {selectedContact.memberType.replace(/_/g, ' ')}
                        </span>
                      )}
                      {selectedContact.mandal && (
                        <span className="bg-muted text-muted-foreground px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-border">
-                         {selectedContact.mandal}
+                         {selectedContact.mandal.replace(/_/g, ' ')}
                        </span>
                      )}
                    </div>
@@ -382,6 +414,19 @@ function ContactsPage() {
                    <div className="space-y-4">
                      <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">Status & Notes</h3>
                      <div className="grid grid-cols-1 gap-4">
+                       <div className="rounded-xl border border-border bg-card p-4 flex items-center justify-between">
+                         <div>
+                           <span className="text-sm font-bold block">Youth Sabha Member</span>
+                           <span className="text-xs text-muted-foreground">Active participant in youth sabha</span>
+                         </div>
+                         <button
+                           type="button"
+                           onClick={() => handleToggleYouth(selectedContact.id, !selectedContact.youthSabhaMember)}
+                           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${selectedContact.youthSabhaMember ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+                         >
+                           <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${selectedContact.youthSabhaMember ? 'translate-x-6' : 'translate-x-1'}`} />
+                         </button>
+                       </div>
                        {selectedContact.followup && (
                          <div className="rounded-xl border border-border bg-amber-50 dark:bg-amber-950/20 p-4 flex items-center justify-between">
                            <div className="flex items-center gap-3 text-amber-900 dark:text-amber-400">

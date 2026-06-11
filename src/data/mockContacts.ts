@@ -19,6 +19,7 @@ export interface Contact {
   mandal?: string;
   avatarUrl?: string;
   notes?: string;
+  youthSabhaMember?: boolean;
 }
 
 const firstNames = ['James', 'Mary', 'John', 'Patricia', 'Robert', 'Jennifer', 'Michael', 'Linda', 'William', 'Elizabeth', 'Adam', 'Alex', 'Amanda', 'Amber', 'Amy', 'Andrea', 'Angela', 'Anna', 'Anthony', 'Ash', 'Arthur', 'Alice', 'Brian', 'Bella', 'Benjamin', 'Chloe', 'Charles', 'Daniel', 'Diana', 'Edward', 'Eleanor', 'Frank', 'Fiona', 'George', 'Grace', 'Henry', 'Hannah', 'Isaac', 'Isabella', 'Jack', 'Julia', 'Kevin', 'Karen', 'Liam', 'Laura', 'Matthew', 'Megan', 'Nathan', 'Natalie', 'Oliver', 'Olivia', 'Peter', 'Penelope', 'Quinn', 'Rachel', 'Samuel', 'Sarah', 'Thomas', 'Taylor', 'Ulysses', 'Uma', 'Victor', 'Victoria', 'William', 'Wendy', 'Xavier', 'Xena', 'Yusuf', 'Yara', 'Zachary', 'Zoe'];
@@ -48,7 +49,8 @@ export function generateMockContacts(count: number = 20): Contact[] {
       country: 'USA',
       mandal: Math.random() > 0.5 ? 'Lake Parsippany' : 'Troy Hills',
       avatarUrl: `https://i.pravatar.cc/150?u=${firstName}${lastName}${i}`,
-      notes: 'Sample contact created via generator.'
+      notes: 'Sample contact created via generator.',
+      youthSabhaMember: Math.random() > 0.5
     };
     
     contacts.push(contact);
