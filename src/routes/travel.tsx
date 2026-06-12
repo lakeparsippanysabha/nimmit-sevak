@@ -46,7 +46,7 @@ export const Route = createFileRoute('/travel')({
 
     let planId = null;
     let stops: TravelStop[] = [];
-    
+
     // Fetch current day plan
     const { data: plans } = await supabase.from('travel_plans').select('id').eq('date', date);
     if (plans && plans.length > 0) {
@@ -56,14 +56,14 @@ export const Route = createFileRoute('/travel')({
         .select('*')
         .eq('plan_id', planId)
         .order('order_index', { ascending: true });
-        
+
       if (stopsData) stops = stopsData;
     }
 
     // Fetch all active travel dates for calendar dots
     const { data: allPlans } = await supabase.from('travel_plans').select('date');
     const itineraryDates = (allPlans || []).map(p => p.date);
-    
+
     // Fetch contacts for searching
     const { data: contactsData } = await supabase.from('contacts').select('*').order('first_name');
     const contacts = mapContactRows((contactsData || []) as ContactRow[]);
@@ -79,18 +79,18 @@ function TravelPage() {
   const { role } = useAuth();
   const { toast } = useToast();
   const isAdmin = role === 'Super Admin' || role === 'Admin';
-  
+
   const [currentPlanId, setCurrentPlanId] = useState<string | null>(initialPlanId);
   const [stops, setStops] = useState<TravelStop[]>(savedStops);
   const [routeGeoJSON, setRouteGeoJSON] = useState<any>(null);
-  const [toastMessage, setToastMessage] = useState<{title: string, type: 'success' | 'error'} | null>(null);
+  const [toastMessage, setToastMessage] = useState<{ title: string, type: 'success' | 'error' } | null>(null);
   const mapRef = useRef<any>(null);
-  
+
   // Modals/UI State
   const [isAddStopOpen, setIsAddStopOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
-  
+
   // Staging Stop (Requirement 7 & Contact logic)
   const [stagedStop, setStagedStop] = useState<{ title: string, address: string, lat: number, lng: number } | null>(null);
   const [stagedTitle, setStagedTitle] = useState('');
@@ -129,9 +129,9 @@ function TravelPage() {
       setRouteGeoJSON(null);
       return;
     }
-    
+
     const coords: [number, number][] = stops.map(s => [s.lng, s.lat]);
-    
+
     fetchDirections(coords).then((route) => {
       if (route && route.geometry) {
         setRouteGeoJSON(route.geometry);
@@ -151,20 +151,20 @@ function TravelPage() {
           if (changed) {
             setStops(updatedStops);
             if (currentPlanId) {
-               supabase.from('travel_stops').upsert(
-                 updatedStops.map(s => ({
-                   id: s.id,
-                   plan_id: currentPlanId,
-                   order_index: s.order_index,
-                   type: s.type,
-                   title: s.title,
-                   address: s.address,
-                   lat: s.lat,
-                   lng: s.lng,
-                   planned_time: s.planned_time,
-                   drive_time_mins: s.drive_time_mins
-                 }))
-               ).then(() => {});
+              supabase.from('travel_stops').upsert(
+                updatedStops.map(s => ({
+                  id: s.id,
+                  plan_id: currentPlanId,
+                  order_index: s.order_index,
+                  type: s.type,
+                  title: s.title,
+                  address: s.address,
+                  lat: s.lat,
+                  lng: s.lng,
+                  planned_time: s.planned_time,
+                  drive_time_mins: s.drive_time_mins
+                }))
+              ).then(() => { });
             }
           }
         }
@@ -182,8 +182,8 @@ function TravelPage() {
         const lats = stops.map(s => s.lat);
         mapRef.current.fitBounds(
           [
-             [Math.min(...lngs), Math.min(...lats)],
-             [Math.max(...lngs), Math.max(...lats)]
+            [Math.min(...lngs), Math.min(...lats)],
+            [Math.max(...lngs), Math.max(...lats)]
           ],
           { padding: 80, duration: 1000 }
         );
@@ -195,9 +195,9 @@ function TravelPage() {
   const contactResults = useMemo(() => {
     if (searchQuery.trim().length < 2) return [];
     const q = searchQuery.toLowerCase();
-    return contacts.filter(c => 
-      c.firstName.toLowerCase().includes(q) || 
-      c.lastName.toLowerCase().includes(q) || 
+    return contacts.filter(c =>
+      c.firstName.toLowerCase().includes(q) ||
+      c.lastName.toLowerCase().includes(q) ||
       (c.city && c.city.toLowerCase().includes(q))
     ).slice(0, 5);
   }, [searchQuery, contacts]);
@@ -241,7 +241,7 @@ function TravelPage() {
       toast("This contact does not have a saved address to route to.", "error");
       return;
     }
-    
+
     // Geocode the contact address to obtain precise lat/lng
     const geoResults = await geocode(fullAddress);
     if (geoResults && geoResults.length > 0) {
@@ -271,14 +271,14 @@ function TravelPage() {
 
   const commitStagedStop = async () => {
     if (!stagedStop) return;
-    
+
     let targetPlanId = currentPlanId;
     if (!targetPlanId) {
       let { data, error } = await supabase.from('travel_plans').insert({ date }).select().single();
       if (error && error.code === '23505') {
-         const existing = await supabase.from('travel_plans').select('id').eq('date', date).single();
-         data = existing.data;
-         error = existing.error;
+        const existing = await supabase.from('travel_plans').select('id').eq('date', date).single();
+        data = existing.data;
+        error = existing.error;
       }
       if (error || !data) {
         handleMutationError('travel:create-plan', error);
@@ -287,7 +287,7 @@ function TravelPage() {
       targetPlanId = data.id;
       setCurrentPlanId(targetPlanId);
     }
-    
+
     const { data: newDbStop, error: stopError } = await supabase.from('travel_stops').insert({
       plan_id: targetPlanId,
       order_index: stops.length,
@@ -297,7 +297,7 @@ function TravelPage() {
       lat: stagedStop.lat,
       lng: stagedStop.lng,
     }).select().single();
-    
+
     if (stopError) {
       handleMutationError('travel:insert-stop', stopError);
       return;
@@ -322,7 +322,7 @@ function TravelPage() {
   // Requirement 6: SMS Serialization
   const shareItinerary = async () => {
     if (stops.length === 0) return;
-    
+
     let msg = `📅 *Itinerary: ${date}*\n\n`;
     stops.forEach((stop, i) => {
       msg += `📍 *${i + 1}. ${stop.title}*\n`;
@@ -335,14 +335,14 @@ function TravelPage() {
         msg += `🕒 Time: ${h12}:${mm} ${ampm}\n`;
       }
       msg += `🏠 ${stop.address}\n`;
-      
+
       // Since drive_time_mins is on the origin going to destination `i+1`
       if (i < stops.length - 1 && stop.drive_time_mins) {
         msg += `⬇️ 🚗 Drive ~${stop.drive_time_mins} min\n`;
       }
       msg += `\n`;
     });
-    
+
     try {
       await navigator.clipboard.writeText(msg);
       toast('Itinerary copied to clipboard!', 'success');
@@ -361,13 +361,13 @@ function TravelPage() {
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     const days = [];
-    
+
     // Padding blanks
     for (let i = 0; i < firstDay.getDay(); i++) {
-       days.push(null);
+      days.push(null);
     }
     for (let i = 1; i <= lastDay.getDate(); i++) {
-       days.push(new Date(year, month, i));
+      days.push(new Date(year, month, i));
     }
     return days;
   };
@@ -379,10 +379,10 @@ function TravelPage() {
           Warning: Missing VITE_MAPBOX_TOKEN in .env. Map functionality is disabled.
         </div>
       )}
-      
+
       {/* Mobile viewport height adjustment */}
       <div className="flex h-[calc(100vh-64px)] w-full overflow-hidden bg-background relative selection-none">
-        
+
         {/* Mobile Toggle */}
         <div className="md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center justify-center rounded-full bg-foreground shadow-2xl p-1 gap-1">
           <button
@@ -401,19 +401,19 @@ function TravelPage() {
 
         {/* Left Pane - Timeline Planner */}
         <div className={`relative h-full w-full flex-col border-r border-border bg-background md:w-[450px] xl:w-[500px] shadow-[10px_0_30px_rgba(0,0,0,0.05)] z-20 ${activeTab === 'list' ? 'flex' : 'hidden md:flex'}`}>
-          
+
           {/* Header */}
           <div className="flex-shrink-0 bg-card p-6 pt-8 border-b border-border/60 z-[60] shadow-sm relative">
             <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-bold tracking-tight text-foreground font-serif">Travel Itinerary</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-foreground font-serif">Vicharan</h1>
               <button onClick={shareItinerary} title="Share Text" className="p-2 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
                 <Share className="h-4 w-4" />
               </button>
             </div>
-            
+
             {/* Custom Interactive Calendar Trigger */}
             <div className="mt-5 relative">
-              <button 
+              <button
                 onClick={() => setIsCalendarOpen(!isCalendarOpen)}
                 className="flex items-center gap-3 w-full rounded-xl border border-border bg-background p-3 text-left font-sans hover:border-primary/50 transition-colors shadow-sm"
               >
@@ -431,15 +431,15 @@ function TravelPage() {
               {/* Calendar Popover */}
               <AnimatePresence>
                 {isCalendarOpen && (
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, y: -10, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -10, scale: 0.95 }}
                     className="absolute top-16 left-0 right-0 rounded-2xl bg-card border border-border shadow-2xl p-4 z-50 font-sans"
                   >
                     <div className="flex items-center justify-between mb-4">
-                      <button 
-                        onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))} 
+                      <button
+                        onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}
                         className="p-1 hover:bg-muted rounded-md"
                       >
                         <ChevronLeft className="h-5 w-5" />
@@ -447,33 +447,33 @@ function TravelPage() {
                       <h3 className="font-bold text-sm">
                         {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                       </h3>
-                      <button 
-                        onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))} 
+                      <button
+                        onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}
                         className="p-1 hover:bg-muted rounded-md"
                       >
                         <ChevronRight className="h-5 w-5" />
                       </button>
                     </div>
-                    
+
                     <div className="grid grid-cols-7 gap-1 text-center mb-2">
                       {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
-                         <div key={d} className="text-[10px] uppercase font-bold text-muted-foreground">{d}</div>
+                        <div key={d} className="text-[10px] uppercase font-bold text-muted-foreground">{d}</div>
                       ))}
                     </div>
-                    
+
                     <div className="grid grid-cols-7 gap-1">
                       {generateCalendarDays().map((d, i) => {
                         if (!d) return <div key={i} className="h-8" />;
-                        
+
                         const dateStr = [
                           d.getFullYear(),
                           String(d.getMonth() + 1).padStart(2, '0'),
                           String(d.getDate()).padStart(2, '0')
                         ].join('-');
-                        
+
                         const isSelected = date === dateStr;
                         const hasItinerary = itineraryDates.includes(dateStr);
-                        
+
                         return (
                           <button
                             key={i}
@@ -506,20 +506,20 @@ function TravelPage() {
             <Reorder.Group axis="y" values={stops} onReorder={handleReorder} className="space-y-10">
               {stops.map((stop, index) => (
                 <Reorder.Item key={stop.id} value={stop} className="relative z-10 mx-auto w-full group/item">
-                  
+
                   {/* Vertical Line Connector */}
                   {index > 0 && (
                     <div className="absolute -top-6 left-[34px] h-6 w-[3px] bg-primary/20 dark:bg-primary/10 rounded-full" />
                   )}
 
                   {/* Drive Time Indicator fetching time stored on Previous Index (Req 2) */}
-                  {index > 0 && stops[index - 1].drive_time_mins !== undefined && stops[index-1].drive_time_mins! > 0 && (
-                     <div className="absolute -top-4 left-[34px] z-20 flex -translate-y-1/2 -translate-x-1/2 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/50 px-2.5 py-0.5 text-[10px] font-bold tracking-tight text-amber-700 dark:text-amber-400 shadow-sm border border-amber-200 dark:border-amber-800 backdrop-blur-md">
-                       <Navigation className="h-3 w-3 mr-1 inline" />
-                       {stops[index - 1].drive_time_mins} min drive
-                     </div>
+                  {index > 0 && stops[index - 1].drive_time_mins !== undefined && stops[index - 1].drive_time_mins! > 0 && (
+                    <div className="absolute -top-4 left-[34px] z-20 flex -translate-y-1/2 -translate-x-1/2 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/50 px-2.5 py-0.5 text-[10px] font-bold tracking-tight text-amber-700 dark:text-amber-400 shadow-sm border border-amber-200 dark:border-amber-800 backdrop-blur-md">
+                      <Navigation className="h-3 w-3 mr-1 inline" />
+                      {stops[index - 1].drive_time_mins} min drive
+                    </div>
                   )}
-                  
+
                   {/* Enhanced Card Layout (Req 3) */}
                   <div className="flex items-stretch gap-4 rounded-2xl border border-border/80 bg-card p-5 shadow-sm transition-all hover:border-primary/50 hover:shadow-lg">
                     <div className="flex cursor-grab flex-col items-center justify-start pt-1 text-muted-foreground/50 hover:text-primary active:cursor-grabbing">
@@ -528,7 +528,7 @@ function TravelPage() {
                       </div>
                       <GripVertical className="h-4 w-4 mt-3 opacity-50" />
                     </div>
-                    
+
                     <div className="flex-1 min-w-0 flex flex-col justify-between">
                       <div>
                         <div className="flex items-start justify-between gap-2">
@@ -541,22 +541,22 @@ function TravelPage() {
                           {stop.address}
                         </p>
                       </div>
-                      
+
                       <div className="mt-5 flex items-center justify-between border-t border-border/50 pt-3">
                         <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground bg-muted/50 border border-border px-2.5 py-1.5 rounded-lg focus-within:ring-1 focus-within:ring-primary focus-within:bg-background transition-colors">
                           <Clock className="h-3.5 w-3.5 text-primary/70" />
-                          <input 
-                            type="time" 
+                          <input
+                            type="time"
                             title="Set planned time"
                             value={stop.planned_time || ''}
                             onChange={(e) => updateStopTime(stop.id, e.target.value)}
                             className="bg-transparent outline-none w-[72px] cursor-text text-foreground placeholder:text-muted-foreground"
                           />
                         </div>
-                        
-                        <Link 
-                          to="/journal" 
-                          search={{ stopId: stop.id }} 
+
+                        <Link
+                          to="/journal"
+                          search={{ stopId: stop.id }}
                           className="flex items-center gap-1.5 text-xs font-bold text-primary hover:text-primary-foreground bg-primary/10 hover:bg-primary px-3 py-1.5 rounded-lg transition-colors ring-1 ring-primary/20 hover:ring-primary shadow-sm"
                         >
                           <BookText className="h-3.5 w-3.5" />
@@ -567,7 +567,7 @@ function TravelPage() {
                   </div>
                 </Reorder.Item>
               ))}
-              
+
               {stops.length === 0 && (
                 <div className="text-center p-8 mt-4 text-muted-foreground border-2 border-dashed rounded-3xl border-border bg-card/50">
                   <MapPin className="h-8 w-8 mx-auto mb-3 opacity-20" />
@@ -581,108 +581,108 @@ function TravelPage() {
             {isAdmin && (
               <div className="mt-8 mb-12">
                 {!isAddStopOpen ? (
-                <button 
-                  onClick={() => setIsAddStopOpen(true)}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-4 text-sm font-bold text-primary transition-all hover:bg-primary/20 hover:border-primary/60"
-                >
-                  <Plus className="h-5 w-5" />
-                  Add Destination
-                </button>
-              ) : (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="rounded-2xl border border-border bg-card p-4 shadow-xl mb-8"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-sm font-bold text-foreground font-serif tracking-tight">Add Destination</h4>
-                    <button onClick={() => { setIsAddStopOpen(false); setStagedStop(null); }} className="text-muted-foreground hover:bg-muted p-1 rounded-md transition-colors">
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                  
-                  {stagedStop ? (
-                     <div className="space-y-4">
-                       <div className="rounded-xl bg-primary/5 border border-primary/20 p-3">
-                         <label className="text-[10px] uppercase font-bold text-primary tracking-wider mb-1 block">Title (Optional Override)</label>
-                         <input 
-                           autoFocus
-                           className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm font-bold text-foreground shadow-sm focus:ring-1 focus:ring-primary outline-none" 
-                           value={stagedTitle}
-                           onChange={e => setStagedTitle(e.target.value)}
-                         />
-                         
-                         <label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mt-3 mb-1 block">Mapping Address</label>
-                         <div className="text-xs text-muted-foreground bg-muted rounded-md p-2 line-clamp-2">{stagedStop.address}</div>
-                       </div>
-                       
-                       <button onClick={commitStagedStop} className="w-full bg-primary text-primary-foreground font-bold text-sm py-3 rounded-xl shadow-md hover:opacity-90 active:scale-95 transition-all">
-                         Confirm & Add to Route
-                       </button>
-                     </div>
-                  ) : (
-                    <>
-                      <div className="relative">
-                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <input 
-                          autoFocus
-                          type="text"
-                          className="w-full rounded-xl border border-input bg-muted/50 py-2.5 pl-9 pr-3 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary focus:bg-background text-foreground placeholder:text-muted-foreground transition-colors"
-                          placeholder="Search contacts or places..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                      </div>
-                      
-                      {/* Unified Results */}
-                      {(contactResults.length > 0 || searchResults.length > 0) && (
-                        <div className="mt-3 flex max-h-64 flex-col overflow-y-auto rounded-xl border border-border bg-card shadow-inner divide-y divide-border/50">
-                          
-                          {/* Contacts Wrapper */}
-                          {contactResults.length > 0 && (
-                            <div className="pb-1">
-                              <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"><User className="h-3 w-3" /> Saved Contacts</div>
-                              {contactResults.map(c => (
-                                <div 
-                                  key={c.id} 
-                                  onClick={() => handleContactSelection(c)}
-                                  className="cursor-pointer px-3 py-2.5 hover:bg-primary/10 transition-colors mx-1 rounded-lg"
-                                >
-                                  <div className="font-bold text-sm text-foreground flex items-center gap-2">
-                                    {c.firstName} {c.lastName}
-                                  </div>
-                                  <div className="truncate text-xs text-muted-foreground mt-0.5">
-                                    {c.address1} {c.city}, {c.state}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-  
-                          {/* Mapbox Wrapper */}
-                          {searchResults.length > 0 && (
-                            <div className="pb-1">
-                              <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"><MapPin className="h-3 w-3" /> Global Locations</div>
-                              {searchResults.map(res => (
-                                <div 
-                                  key={res.id} 
-                                  onClick={() => handleMapboxSelection(res)}
-                                  className="cursor-pointer px-3 py-2.5 hover:bg-primary/10 transition-colors mx-1 rounded-lg"
-                                >
-                                  <div className="font-bold text-sm text-foreground">{res.text}</div>
-                                  <div className="truncate text-xs text-muted-foreground mt-0.5">{res.place_name}</div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          
+                  <button
+                    onClick={() => setIsAddStopOpen(true)}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-4 text-sm font-bold text-primary transition-all hover:bg-primary/20 hover:border-primary/60"
+                  >
+                    <Plus className="h-5 w-5" />
+                    Add Destination
+                  </button>
+                ) : (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-2xl border border-border bg-card p-4 shadow-xl mb-8"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-sm font-bold text-foreground font-serif tracking-tight">Add Destination</h4>
+                      <button onClick={() => { setIsAddStopOpen(false); setStagedStop(null); }} className="text-muted-foreground hover:bg-muted p-1 rounded-md transition-colors">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    {stagedStop ? (
+                      <div className="space-y-4">
+                        <div className="rounded-xl bg-primary/5 border border-primary/20 p-3">
+                          <label className="text-[10px] uppercase font-bold text-primary tracking-wider mb-1 block">Title (Optional Override)</label>
+                          <input
+                            autoFocus
+                            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm font-bold text-foreground shadow-sm focus:ring-1 focus:ring-primary outline-none"
+                            value={stagedTitle}
+                            onChange={e => setStagedTitle(e.target.value)}
+                          />
+
+                          <label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mt-3 mb-1 block">Mapping Address</label>
+                          <div className="text-xs text-muted-foreground bg-muted rounded-md p-2 line-clamp-2">{stagedStop.address}</div>
                         </div>
-                      )}
-                    </>
-                  )}
-                </motion.div>
-              )}
-            </div>
+
+                        <button onClick={commitStagedStop} className="w-full bg-primary text-primary-foreground font-bold text-sm py-3 rounded-xl shadow-md hover:opacity-90 active:scale-95 transition-all">
+                          Confirm & Add to Route
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="relative">
+                          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <input
+                            autoFocus
+                            type="text"
+                            className="w-full rounded-xl border border-input bg-muted/50 py-2.5 pl-9 pr-3 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary focus:bg-background text-foreground placeholder:text-muted-foreground transition-colors"
+                            placeholder="Search contacts or places..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                          />
+                        </div>
+
+                        {/* Unified Results */}
+                        {(contactResults.length > 0 || searchResults.length > 0) && (
+                          <div className="mt-3 flex max-h-64 flex-col overflow-y-auto rounded-xl border border-border bg-card shadow-inner divide-y divide-border/50">
+
+                            {/* Contacts Wrapper */}
+                            {contactResults.length > 0 && (
+                              <div className="pb-1">
+                                <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"><User className="h-3 w-3" /> Saved Contacts</div>
+                                {contactResults.map(c => (
+                                  <div
+                                    key={c.id}
+                                    onClick={() => handleContactSelection(c)}
+                                    className="cursor-pointer px-3 py-2.5 hover:bg-primary/10 transition-colors mx-1 rounded-lg"
+                                  >
+                                    <div className="font-bold text-sm text-foreground flex items-center gap-2">
+                                      {c.firstName} {c.lastName}
+                                    </div>
+                                    <div className="truncate text-xs text-muted-foreground mt-0.5">
+                                      {c.address1} {c.city}, {c.state}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Mapbox Wrapper */}
+                            {searchResults.length > 0 && (
+                              <div className="pb-1">
+                                <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"><MapPin className="h-3 w-3" /> Global Locations</div>
+                                {searchResults.map(res => (
+                                  <div
+                                    key={res.id}
+                                    onClick={() => handleMapboxSelection(res)}
+                                    className="cursor-pointer px-3 py-2.5 hover:bg-primary/10 transition-colors mx-1 rounded-lg"
+                                  >
+                                    <div className="font-bold text-sm text-foreground">{res.text}</div>
+                                    <div className="truncate text-xs text-muted-foreground mt-0.5">{res.place_name}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </motion.div>
+                )}
+              </div>
             )}
 
           </div>
@@ -744,11 +744,10 @@ function TravelPage() {
               initial={{ opacity: 0, y: 50, scale: 0.9 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 50, scale: 0.9 }}
-              className={`fixed bottom-24 right-6 md:bottom-6 z-[100] flex items-center gap-3 rounded-xl px-5 py-4 shadow-2xl font-sans ${
-                toastMessage.type === 'success' 
-                  ? 'bg-emerald-600 text-white' 
+              className={`fixed bottom-24 right-6 md:bottom-6 z-[100] flex items-center gap-3 rounded-xl px-5 py-4 shadow-2xl font-sans ${toastMessage.type === 'success'
+                  ? 'bg-emerald-600 text-white'
                   : 'bg-red-600 text-white'
-              }`}
+                }`}
             >
               <span className="text-sm font-bold tracking-wide">{toastMessage.title}</span>
             </motion.div>

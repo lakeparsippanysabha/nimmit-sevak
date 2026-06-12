@@ -5,6 +5,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Calendar, CheckCircle2, Save, Activity } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import type { Contact } from '../data/mockContacts';
 import type { ContactRow } from '../lib/database.types';
 import { mapContactRows } from '../lib/mappers';
 import { handleLoaderError } from '../lib/errors';
@@ -70,9 +71,10 @@ function AttendancePage() {
   const { contacts: initialContacts, dbAttendanceMap: initialDbAttendanceMap } = Route.useLoaderData();
   
   const [searchQuery, setSearchQuery] = useState('');
+  const [showYouthOnly, setShowYouthOnly] = useState(false);
   
   // Track client hydration and sync state 
-  const [contacts, setContacts] = useState<ContactRow[]>(initialContacts);
+  const [contacts, setContacts] = useState<Contact[]>(initialContacts);
   const [prevDate, setPrevDate] = useState(date);
   
   const [attendance, setAttendance] = useState<Map<string, any>>(() => new Map(initialDbAttendanceMap));
@@ -136,6 +138,10 @@ function AttendancePage() {
         c.lastName.toLowerCase().includes(q)
       );
     }
+
+    if (showYouthOnly) {
+      filtered = filtered.filter(c => c.youthSabhaMember);
+    }
     
     filtered.sort((a, b) => {
       const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
@@ -144,7 +150,7 @@ function AttendancePage() {
     });
 
     return filtered;
-  }, [contacts, searchQuery]);
+  }, [contacts, searchQuery, showYouthOnly]);
 
   const parentRef = useRef<HTMLDivElement>(null);
   
@@ -264,6 +270,19 @@ function AttendancePage() {
                 className="block w-full rounded-xl border border-input bg-background py-2.5 pl-10 pr-4 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary font-sans placeholder:text-muted-foreground"
               />
             </motion.div>
+
+            <div className="mt-4 flex items-center justify-between px-1 font-sans">
+              <label className="group flex cursor-pointer items-center gap-3 text-sm font-medium text-foreground">
+                <button
+                  type="button"
+                  onClick={() => setShowYouthOnly(!showYouthOnly)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showYouthOnly ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+                >
+                  <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${showYouthOnly ? 'translate-x-4' : 'translate-x-1'}`} />
+                </button>
+                <span className="transition-colors group-hover:text-primary">Youth Sabha Members Only</span>
+              </label>
+            </div>
           </div>
 
           <div className="relative flex-1 overflow-hidden outline-none font-sans" ref={parentRef} style={{ overflowY: 'auto' }}>
