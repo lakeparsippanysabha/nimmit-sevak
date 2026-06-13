@@ -8,6 +8,8 @@
 @plugin "@tailwindcss/typography";
 
 @theme inline {
+  --breakpoint-md: 48.0625rem;
+
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Fraunces", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
 
